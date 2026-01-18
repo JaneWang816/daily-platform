@@ -1,0 +1,11 @@
+// components/dashboard/dialogs/index.ts
+export * from "./task-dialog"
+export * from "./journal-life-dialog"
+export * from "./journal-learning-dialog"
+export * from "./journal-reading-dialog"
+export * from "./journal-gratitude-dialog"
+export * from "./journal-travel-dialog"
+export * from "./finance-dialog"
+export * from "./exercise-dialog"
+export * from "./health-dialog"
+export * from "./daily-plan-dialog"

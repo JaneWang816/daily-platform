@@ -1,0 +1,905 @@
+//apps/life/src/app/dashboard/goals/page.tsx
+"use client"
+
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { createBrowserClient } from '@supabase/ssr'
+import { 
+  Button, 
+  Input, 
+  Card, 
+  CardContent,
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  Label,
+  Textarea,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@daily/ui"
+import { cn } from "@daily/utils"
+import { format, differenceInDays, parseISO } from "date-fns"
+import {
+  ArrowLeft,
+  Plus,
+  Target,
+  Calendar,
+  TrendingUp,
+  TrendingDown,
+  Flame,
+  Pencil,
+  Trash2,
+  Pause,
+  Play,
+  CheckCircle,
+  MoreVertical,
+  BarChart3,
+} from "lucide-react"
+
+// ============================================
+// 類型定義
+// ============================================
+type Goal = {
+  id: string
+  user_id: string
+  title: string
+  description: string | null
+  icon: string | null
+  color: string | null
+  goal_type: string | null  // countdown, numeric, streak, count
+  target_date: string | null
+  target_value: number | null
+  target_count: number | null
+  current_value: number | null
+  current_count: number | null
+  start_value: number | null
+  unit: string | null
+  direction: string | null  // increase, decrease
+  status: string | null  // active, completed, paused
+  show_on_dashboard: boolean | null
+  sort_order: number | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+type GoalType = "countdown" | "numeric" | "streak" | "count"
+type FilterType = "all" | "active" | "completed" | "paused"
+
+// ============================================
+// 常數
+// ============================================
+const GOAL_TYPES = [
+  { value: "countdown", label: "倒數計時", icon: Calendar, description: "距離某個日期的倒數" },
+  { value: "numeric", label: "數值目標", icon: TrendingUp, description: "達成特定數值" },
+  { value: "streak", label: "連續天數", icon: Flame, description: "連續完成某件事" },
+  { value: "count", label: "累計次數", icon: Target, description: "累計達成次數" },
+]
+
+const COLORS = [
+  { value: "blue", label: "藍色", class: "bg-blue-500", border: "border-blue-200", bg: "bg-blue-50", text: "text-blue-600" },
+  { value: "red", label: "紅色", class: "bg-red-500", border: "border-red-200", bg: "bg-red-50", text: "text-red-600" },
+  { value: "green", label: "綠色", class: "bg-green-500", border: "border-green-200", bg: "bg-green-50", text: "text-green-600" },
+  { value: "amber", label: "琥珀", class: "bg-amber-500", border: "border-amber-200", bg: "bg-amber-50", text: "text-amber-600" },
+  { value: "purple", label: "紫色", class: "bg-purple-500", border: "border-purple-200", bg: "bg-purple-50", text: "text-purple-600" },
+  { value: "pink", label: "粉紅", class: "bg-pink-500", border: "border-pink-200", bg: "bg-pink-50", text: "text-pink-600" },
+  { value: "cyan", label: "青色", class: "bg-cyan-500", border: "border-cyan-200", bg: "bg-cyan-50", text: "text-cyan-600" },
+]
+
+const ICONS = ["🎯", "📚", "💪", "🏃", "💰", "📝", "🎓", "❤️", "🌟", "🔥", "✅", "📅", "🎉", "🏆", "💡", "🌱"]
+
+// ============================================
+// Supabase Client
+// ============================================
+function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
+
+// ============================================
+// 工具函數
+// ============================================
+function getColorConfig(color: string | null) {
+  return COLORS.find(c => c.value === color) || COLORS[0]
+}
+
+function calcProgress(goal: Goal): number {
+  switch (goal.goal_type) {
+    case "countdown":
+      return 0 // 倒數型不顯示進度條
+    case "numeric":
+      if (!goal.target_value) return 0
+      const start = goal.start_value ?? 0
+      const current = goal.current_value ?? start
+      const target = goal.target_value
+      if (goal.direction === "decrease") {
+        return Math.min(100, Math.max(0, ((start - current) / (start - target)) * 100))
+      }
+      return Math.min(100, Math.max(0, ((current - start) / (target - start)) * 100))
+    case "streak":
+    case "count":
+      if (!goal.target_count) return 0
+      return Math.min(100, ((goal.current_count ?? 0) / goal.target_count) * 100)
+    default:
+      return 0
+  }
+}
+
+function getStatusText(goal: Goal): string {
+  switch (goal.goal_type) {
+    case "countdown":
+      if (!goal.target_date) return "未設定日期"
+      const days = differenceInDays(parseISO(goal.target_date), new Date())
+      if (days < 0) return "已過期"
+      if (days === 0) return "就是今天！"
+      return `還有 ${days} 天`
+    case "numeric":
+      return `${goal.current_value ?? goal.start_value ?? 0} / ${goal.target_value ?? 0} ${goal.unit || ""}`
+    case "streak":
+      return `連續 ${goal.current_count ?? 0} 天`
+    case "count":
+      return `${goal.current_count ?? 0} / ${goal.target_count ?? 0} ${goal.unit || "次"}`
+    default:
+      return ""
+  }
+}
+
+// ============================================
+// GoalCard 組件
+// ============================================
+function GoalCard({ 
+  goal, 
+  onEdit, 
+  onDelete, 
+  onUpdateStatus,
+  onUpdateProgress,
+}: { 
+  goal: Goal
+  onEdit: (goal: Goal) => void
+  onDelete: (goal: Goal) => void
+  onUpdateStatus: (goal: Goal, status: string) => void
+  onUpdateProgress: (goal: Goal) => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const colors = getColorConfig(goal.color)
+  const progress = calcProgress(goal)
+  const isCompleted = goal.status === "completed"
+  const isPaused = goal.status === "paused"
+
+  return (
+    <div className={cn(
+      "relative p-4 rounded-xl border-2 transition-all",
+      colors.bg, colors.border,
+      isPaused && "opacity-60"
+    )}>
+      {/* 完成標記 */}
+      {isCompleted && (
+        <div className="absolute top-2 right-2">
+          <CheckCircle className="w-5 h-5 text-green-500" />
+        </div>
+      )}
+
+      {/* 標題列 */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className={cn("w-12 h-12 rounded-full flex items-center justify-center border", colors.bg, colors.border)}>
+            <span className="text-2xl">{goal.icon || "🎯"}</span>
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-800">{goal.title}</h3>
+            {goal.description && (
+              <p className="text-sm text-gray-500 line-clamp-1">{goal.description}</p>
+            )}
+          </div>
+        </div>
+
+        {/* 操作選單 */}
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="p-1 hover:bg-gray-100 rounded"
+          >
+            <MoreVertical className="w-4 h-4 text-gray-400" />
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-8 bg-white border rounded-lg shadow-lg z-20 py-1 min-w-32">
+                <button
+                  onClick={() => { onEdit(goal); setMenuOpen(false) }}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <Pencil className="w-4 h-4" />
+                  編輯
+                </button>
+                {goal.status === "active" && (
+                  <button
+                    onClick={() => { onUpdateStatus(goal, "paused"); setMenuOpen(false) }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <Pause className="w-4 h-4" />
+                    暫停
+                  </button>
+                )}
+                {goal.status === "paused" && (
+                  <button
+                    onClick={() => { onUpdateStatus(goal, "active"); setMenuOpen(false) }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <Play className="w-4 h-4" />
+                    恢復
+                  </button>
+                )}
+                <button
+                  onClick={() => { onDelete(goal); setMenuOpen(false) }}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2 text-red-600"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  刪除
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 狀態顯示 */}
+      <div className={cn("text-lg font-bold mb-2", colors.text)}>
+        {getStatusText(goal)}
+      </div>
+
+      {/* 進度條（非倒數型） */}
+      {goal.goal_type !== "countdown" && (
+        <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+          <div 
+            className={cn("h-full transition-all duration-500", colors.class)}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+
+      {/* 更新進度按鈕 */}
+      {goal.status === "active" && goal.goal_type !== "countdown" && (
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="w-full mt-2"
+          onClick={() => onUpdateProgress(goal)}
+        >
+          更新進度
+        </Button>
+      )}
+
+      {/* 狀態標籤 */}
+      {(isCompleted || isPaused) && (
+        <div className={cn(
+          "absolute top-2 right-12 text-xs px-2 py-1 rounded-full",
+          isCompleted ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+        )}>
+          {isCompleted ? "已完成" : "已暫停"}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// 主元件
+// ============================================
+export default function GoalsPage() {
+  const supabase = createClient()
+
+  const [goals, setGoals] = useState<Goal[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [filter, setFilter] = useState<FilterType>("all")
+
+  // 對話框狀態
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
+  const [progressDialogOpen, setProgressDialogOpen] = useState(false)
+  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingGoal, setDeletingGoal] = useState<Goal | null>(null)
+
+  // 表單狀態
+  const [formData, setFormData] = useState({
+    goalType: "countdown" as GoalType,
+    title: "",
+    description: "",
+    icon: "🎯",
+    color: "blue",
+    targetDate: "",
+    targetValue: "",
+    currentValue: "",
+    startValue: "",
+    targetCount: "",
+    unit: "",
+    direction: "increase" as "increase" | "decrease",
+    showOnDashboard: true,
+  })
+  const [progressValue, setProgressValue] = useState("")
+
+  // 載入目標
+  const fetchGoals = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+      .from("goals")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("status", { ascending: true })
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false })
+
+    if (data) {
+      setGoals(data as Goal[])
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    fetchGoals()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 開啟新增/編輯對話框
+  const openDialog = (goal?: Goal) => {
+    if (goal) {
+      setEditingGoal(goal)
+      setFormData({
+        goalType: (goal.goal_type as GoalType) || "countdown",
+        title: goal.title,
+        description: goal.description || "",
+        icon: goal.icon || "🎯",
+        color: goal.color || "blue",
+        targetDate: goal.target_date || "",
+        targetValue: goal.target_value?.toString() || "",
+        currentValue: goal.current_value?.toString() || "",
+        startValue: goal.start_value?.toString() || "",
+        targetCount: goal.target_count?.toString() || "",
+        unit: goal.unit || "",
+        direction: (goal.direction as "increase" | "decrease") || "increase",
+        showOnDashboard: goal.show_on_dashboard ?? true,
+      })
+    } else {
+      setEditingGoal(null)
+      setFormData({
+        goalType: "countdown",
+        title: "",
+        description: "",
+        icon: "🎯",
+        color: "blue",
+        targetDate: "",
+        targetValue: "",
+        currentValue: "",
+        startValue: "",
+        targetCount: "",
+        unit: "",
+        direction: "increase",
+        showOnDashboard: true,
+      })
+    }
+    setDialogOpen(true)
+  }
+
+  // 儲存目標
+  const handleSave = async () => {
+    if (!formData.title.trim()) return
+    setSaving(true)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setSaving(false)
+      return
+    }
+
+    const goalData: Record<string, unknown> = {
+      title: formData.title.trim(),
+      description: formData.description.trim() || null,
+      icon: formData.icon,
+      color: formData.color,
+      goal_type: formData.goalType,
+      show_on_dashboard: formData.showOnDashboard,
+    }
+
+    switch (formData.goalType) {
+      case "countdown":
+        goalData.target_date = formData.targetDate || null
+        break
+      case "numeric":
+        goalData.start_value = formData.startValue ? parseFloat(formData.startValue) : null
+        goalData.target_value = formData.targetValue ? parseFloat(formData.targetValue) : null
+        goalData.current_value = formData.currentValue ? parseFloat(formData.currentValue) : (formData.startValue ? parseFloat(formData.startValue) : null)
+        goalData.unit = formData.unit || null
+        goalData.direction = formData.direction
+        break
+      case "streak":
+        goalData.target_count = formData.targetCount ? parseInt(formData.targetCount) : null
+        goalData.current_count = editingGoal?.current_count ?? 0
+        break
+      case "count":
+        goalData.target_count = formData.targetCount ? parseInt(formData.targetCount) : null
+        goalData.current_count = editingGoal?.current_count ?? 0
+        goalData.unit = formData.unit || "次"
+        break
+    }
+
+    if (editingGoal) {
+      await supabase
+        .from("goals")
+        .update(goalData)
+        .eq("id", editingGoal.id)
+    } else {
+      await supabase
+        .from("goals")
+        .insert({
+          ...goalData,
+          user_id: user.id,
+          status: "active",
+          started_at: new Date().toISOString(),
+        })
+    }
+
+    setSaving(false)
+    setDialogOpen(false)
+    fetchGoals()
+  }
+
+  // 更新狀態
+  const handleUpdateStatus = async (goal: Goal, status: string) => {
+    const updateData: Record<string, unknown> = { status }
+    if (status === "completed") {
+      updateData.completed_at = new Date().toISOString()
+    }
+    await supabase.from("goals").update(updateData).eq("id", goal.id)
+    fetchGoals()
+  }
+
+  // 開啟進度對話框
+  const openProgressDialog = (goal: Goal) => {
+    setSelectedGoal(goal)
+    setProgressValue("")
+    setProgressDialogOpen(true)
+  }
+
+  // 更新進度
+  const handleUpdateProgress = async () => {
+    if (!selectedGoal || !progressValue) return
+    setSaving(true)
+
+    const value = parseFloat(progressValue)
+    const updateData: Record<string, unknown> = {}
+
+    if (selectedGoal.goal_type === "numeric") {
+      updateData.current_value = value
+      // 檢查是否達成目標
+      if (selectedGoal.direction === "decrease" && value <= (selectedGoal.target_value || 0)) {
+        updateData.status = "completed"
+        updateData.completed_at = new Date().toISOString()
+      } else if (selectedGoal.direction === "increase" && value >= (selectedGoal.target_value || 0)) {
+        updateData.status = "completed"
+        updateData.completed_at = new Date().toISOString()
+      }
+    } else {
+      updateData.current_count = value
+      if (value >= (selectedGoal.target_count || 0)) {
+        updateData.status = "completed"
+        updateData.completed_at = new Date().toISOString()
+      }
+    }
+
+    await supabase.from("goals").update(updateData).eq("id", selectedGoal.id)
+    
+    setSaving(false)
+    setProgressDialogOpen(false)
+    setSelectedGoal(null)
+    fetchGoals()
+  }
+
+  // 刪除目標
+  const handleDelete = async () => {
+    if (!deletingGoal) return
+    await supabase.from("goals").delete().eq("id", deletingGoal.id)
+    setDeleteDialogOpen(false)
+    setDeletingGoal(null)
+    fetchGoals()
+  }
+
+  // 篩選目標
+  const filteredGoals = goals.filter(g => {
+    if (filter === "all") return g.status !== "archived"
+    return g.status === filter
+  })
+
+  // 統計
+  const stats = {
+    total: goals.filter(g => g.status !== "archived").length,
+    active: goals.filter(g => g.status === "active").length,
+    completed: goals.filter(g => g.status === "completed").length,
+    paused: goals.filter(g => g.status === "paused").length,
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* 返回按鈕 */}
+      <Link href="/dashboard">
+        <Button variant="ghost" size="sm" className="gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          返回總覽
+        </Button>
+      </Link>
+
+      {/* 頁面標題 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">🎯 目標管理</h1>
+          <p className="text-gray-600 mt-1">設定目標，追蹤進度</p>
+        </div>
+        <Button onClick={() => openDialog()} className="bg-blue-600 hover:bg-blue-700">
+          <Plus className="w-4 h-4 mr-2" />
+          新增目標
+        </Button>
+      </div>
+
+      {/* 統計卡片 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
+            <p className="text-xs text-gray-500">全部目標</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-blue-600">{stats.active}</p>
+            <p className="text-xs text-gray-500">進行中</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
+            <p className="text-xs text-gray-500">已完成</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-gray-400">{stats.paused}</p>
+            <p className="text-xs text-gray-500">已暫停</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 篩選按鈕 */}
+      <div className="flex gap-2">
+        {(["all", "active", "completed", "paused"] as FilterType[]).map((f) => (
+          <Button
+            key={f}
+            variant={filter === f ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFilter(f)}
+          >
+            {f === "all" ? "全部" : f === "active" ? "進行中" : f === "completed" ? "已完成" : "已暫停"}
+          </Button>
+        ))}
+      </div>
+
+      {/* 目標列表 */}
+      {filteredGoals.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-lg border">
+          <Target className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <h3 className="text-lg font-medium text-gray-800 mb-2">
+            {filter === "all" ? "還沒有目標" : `沒有${filter === "active" ? "進行中" : filter === "completed" ? "已完成" : "暫停"}的目標`}
+          </h3>
+          {filter === "all" && (
+            <Button onClick={() => openDialog()} className="mt-4">
+              <Plus className="w-4 h-4 mr-2" />
+              建立目標
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredGoals.map((goal) => (
+            <GoalCard
+              key={goal.id}
+              goal={goal}
+              onEdit={openDialog}
+              onDelete={(g) => { setDeletingGoal(g); setDeleteDialogOpen(true) }}
+              onUpdateStatus={handleUpdateStatus}
+              onUpdateProgress={openProgressDialog}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* 新增/編輯對話框 */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingGoal ? "編輯目標" : "新增目標"}</DialogTitle>
+            <DialogDescription>
+              {editingGoal ? "修改目標設定" : "設定一個新的目標來追蹤進度"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* 目標類型（新增時才能選） */}
+            {!editingGoal && (
+              <div className="space-y-2">
+                <Label>目標類型 *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {GOAL_TYPES.map((type) => {
+                    const Icon = type.icon
+                    return (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, goalType: type.value as GoalType })}
+                        className={cn(
+                          "p-3 rounded-lg border-2 text-left transition-all",
+                          formData.goalType === type.value
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300"
+                        )}
+                      >
+                        <Icon className="w-5 h-5 mb-1" />
+                        <div className="font-medium text-sm">{type.label}</div>
+                        <div className="text-xs text-gray-500">{type.description}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 基本資訊 */}
+            <div className="space-y-2">
+              <Label>目標名稱 *</Label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="例如：減重 5 公斤"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>說明</Label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="選填"
+                rows={2}
+              />
+            </div>
+
+            {/* 圖示選擇 */}
+            <div className="space-y-2">
+              <Label>圖示</Label>
+              <div className="flex flex-wrap gap-2">
+                {ICONS.map((icon) => (
+                  <button
+                    key={icon}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, icon })}
+                    className={cn(
+                      "w-10 h-10 rounded-lg border-2 text-xl flex items-center justify-center",
+                      formData.icon === icon ? "border-blue-500 bg-blue-50" : "border-gray-200"
+                    )}
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 顏色選擇 */}
+            <div className="space-y-2">
+              <Label>顏色</Label>
+              <div className="flex gap-2">
+                {COLORS.map((color) => (
+                  <button
+                    key={color.value}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, color: color.value })}
+                    className={cn(
+                      "w-8 h-8 rounded-full",
+                      color.class,
+                      formData.color === color.value && "ring-2 ring-offset-2 ring-gray-400"
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* 倒數型：目標日期 */}
+            {formData.goalType === "countdown" && (
+              <div className="space-y-2">
+                <Label>目標日期 *</Label>
+                <Input
+                  type="date"
+                  value={formData.targetDate}
+                  onChange={(e) => setFormData({ ...formData, targetDate: e.target.value })}
+                />
+              </div>
+            )}
+
+            {/* 數值型 */}
+            {formData.goalType === "numeric" && (
+              <>
+                <div className="space-y-2">
+                  <Label>方向</Label>
+                  <Select
+                    value={formData.direction}
+                    onValueChange={(v) => setFormData({ ...formData, direction: v as "increase" | "decrease" })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="increase">
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4" /> 增加
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="decrease">
+                        <div className="flex items-center gap-2">
+                          <TrendingDown className="w-4 h-4" /> 減少
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>起始值</Label>
+                    <Input
+                      type="number"
+                      value={formData.startValue}
+                      onChange={(e) => setFormData({ ...formData, startValue: e.target.value })}
+                      placeholder="例如：70"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>目標值 *</Label>
+                    <Input
+                      type="number"
+                      value={formData.targetValue}
+                      onChange={(e) => setFormData({ ...formData, targetValue: e.target.value })}
+                      placeholder="例如：65"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>單位</Label>
+                  <Input
+                    value={formData.unit}
+                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                    placeholder="例如：公斤"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* 連續/累計型 */}
+            {(formData.goalType === "streak" || formData.goalType === "count") && (
+              <>
+                <div className="space-y-2">
+                  <Label>{formData.goalType === "streak" ? "目標天數" : "目標次數"} *</Label>
+                  <Input
+                    type="number"
+                    value={formData.targetCount}
+                    onChange={(e) => setFormData({ ...formData, targetCount: e.target.value })}
+                    placeholder={formData.goalType === "streak" ? "例如：30" : "例如：100"}
+                  />
+                </div>
+                {formData.goalType === "count" && (
+                  <div className="space-y-2">
+                    <Label>單位</Label>
+                    <Input
+                      value={formData.unit}
+                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                      placeholder="例如：本書"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>取消</Button>
+            <Button onClick={handleSave} disabled={saving || !formData.title.trim()}>
+              {saving ? "儲存中..." : editingGoal ? "更新" : "建立目標"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 更新進度對話框 */}
+      <Dialog open={progressDialogOpen} onOpenChange={setProgressDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>更新進度</DialogTitle>
+            <DialogDescription>
+              {selectedGoal?.icon} {selectedGoal?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="text-center text-sm text-gray-500">
+              目前：{selectedGoal?.goal_type === "numeric" 
+                ? `${selectedGoal?.current_value ?? selectedGoal?.start_value ?? 0} ${selectedGoal?.unit || ""}`
+                : `${selectedGoal?.current_count ?? 0} ${selectedGoal?.unit || ""}`
+              }
+            </div>
+            <div className="space-y-2">
+              <Label>
+                {selectedGoal?.goal_type === "numeric" 
+                  ? `新數值（${selectedGoal?.unit || ""}）`
+                  : `新次數`
+                }
+              </Label>
+              <Input
+                type="number"
+                value={progressValue}
+                onChange={(e) => setProgressValue(e.target.value)}
+                placeholder="輸入新的數值"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProgressDialogOpen(false)}>取消</Button>
+            <Button onClick={handleUpdateProgress} disabled={saving || !progressValue}>
+              {saving ? "更新中..." : "更新"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 刪除確認對話框 */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除</AlertDialogTitle>
+            <AlertDialogDescription>
+              確定要刪除目標「{deletingGoal?.title}」嗎？此操作無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+              刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
