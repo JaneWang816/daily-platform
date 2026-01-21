@@ -1,4 +1,3 @@
-//apps/life/src/components/layout/sidebar.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -27,6 +26,7 @@ import {
   PieChart,
   Target,
   LogOut,
+  GraduationCap,
 } from "lucide-react"
 
 type ModuleType = 'journal' | 'habits' | 'tasks' | 'schedule' | 'health' | 'finance' | 'study'
@@ -223,7 +223,18 @@ export function Sidebar() {
         )}
       </nav>
 
-      <div className="p-4 border-t">
+      {/* 底部：切換平台 + 登出 */}
+      <div className="p-4 border-t space-y-1">
+        {/* 切換到學習平台 */}
+        <Link
+          href="http://localhost:3002/dashboard"
+          className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-600 rounded-lg hover:bg-gray-100"
+        >
+          <GraduationCap className="w-5 h-5 mr-3 text-indigo-600" />
+          切換到學習平台
+        </Link>
+
+        {/* 登出 */}
         <button
           onClick={handleLogout}
           className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-600 rounded-lg hover:bg-gray-100"
