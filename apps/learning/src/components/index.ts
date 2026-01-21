@@ -11,5 +11,5 @@ export * from "./questions"
 export * from "./flashcards"
 
 // Layout 元件
-export { Sidebar } from "./sidebar"
+export { Sidebar } from "./layout/sidebar"
 export { Header } from "./header"
