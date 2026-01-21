@@ -4,7 +4,7 @@
 import { useRouter } from "next/navigation"
 import { Target, Check, X } from "lucide-react"
 import { PanelWrapper, EmptyState } from "./panel-wrapper"
-import type { HabitWithLog } from "@/lib/hooks/use-dashboard-data"
+import type { HabitWithLog } from "@/hooks/use-dashboard-data"
 
 interface HabitPanelProps {
   habits: HabitWithLog[]
