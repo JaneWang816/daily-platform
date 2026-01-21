@@ -88,8 +88,8 @@ export default function DashboardPage() {
         .from("questions")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id)
-        .lt("streak", 3)
-        .gt("times_practiced", 0)
+        .lt("consecutive_correct", 3)  // ← 修正
+        .gt("attempt_count", 0)
 
       // 取得今日學習時間
       const today = new Date().toISOString().split("T")[0]
@@ -105,7 +105,7 @@ export default function DashboardPage() {
         .from("flashcards")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id)
-        .lte("next_review", new Date().toISOString())
+        .lte("next_review_at", new Date().toISOString())
 
       setStats({
         subjectCount: subjectCount || 0,

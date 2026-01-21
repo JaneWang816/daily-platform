@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { createClient } from "@daily/database/client"
 import { cn } from "@daily/utils"
 import {
   LayoutDashboard,
@@ -17,6 +18,8 @@ import {
   GraduationCap,
   ChevronLeft,
   ChevronRight,
+  LogOut,
+  Leaf,
 } from "lucide-react"
 
 interface NavItem {
@@ -71,6 +74,7 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
@@ -85,6 +89,12 @@ export function Sidebar() {
       return pathname === "/dashboard"
     }
     return pathname.startsWith(href)
+  }
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push("http://localhost:3000")
   }
 
   return (
@@ -188,18 +198,34 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      {/* 底部連結到生活平台 */}
-      {!collapsed && (
-        <div className="p-4 border-t border-gray-200">
-          <Link
-            href="http://localhost:3001/dashboard"
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            <span>切換到生活平台</span>
-          </Link>
-        </div>
-      )}
+      {/* 底部：切換平台 + 登出 */}
+      <div className="border-t border-gray-200 p-2 space-y-1">
+        {/* 切換到生活平台 */}
+        <Link
+          href="http://localhost:3001/dashboard"
+          className={cn(
+            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors",
+            collapsed && "justify-center"
+          )}
+          title={collapsed ? "切換到生活平台" : undefined}
+        >
+          <Leaf className="w-5 h-5 text-green-600 flex-shrink-0" />
+          {!collapsed && <span>切換到生活平台</span>}
+        </Link>
+
+        {/* 登出 */}
+        <button
+          onClick={handleLogout}
+          className={cn(
+            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors w-full",
+            collapsed && "justify-center"
+          )}
+          title={collapsed ? "登出" : undefined}
+        >
+          <LogOut className="w-5 h-5 text-gray-400 flex-shrink-0" />
+          {!collapsed && <span>登出</span>}
+        </button>
+      </div>
     </aside>
   )
 }
