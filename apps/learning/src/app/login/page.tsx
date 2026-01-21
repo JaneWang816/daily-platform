@@ -96,7 +96,10 @@ export default function LoginPage() {
           </div>
 
           <div className="mt-4 pt-4 border-t text-center">
-            <Link href="http://localhost:3001" className="text-sm text-gray-500 hover:text-gray-700">
+            <Link 
+              href={`${process.env.NEXT_PUBLIC_LIFE_URL || "http://localhost:3001"}`} 
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
               ← 返回生活管理平台
             </Link>
           </div>

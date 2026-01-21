@@ -1,0 +1,5 @@
+Portal	https://daily-platform-portal.vercel.app
+
+Life	https://daily-platform-life.vercel.app
+
+Learning	https://daily-platform-learning.vercel.app

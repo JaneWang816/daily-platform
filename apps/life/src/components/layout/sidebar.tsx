@@ -92,6 +92,9 @@ export function Sidebar() {
   const [expandedItems, setExpandedItems] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
+  const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || "http://localhost:3000"
+  const learningUrl = process.env.NEXT_PUBLIC_LEARNING_URL || "http://localhost:3002"
+
   useEffect(() => {
     const loadEnabledModules = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -148,7 +151,7 @@ export function Sidebar() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push("http://localhost:3000")
+    router.push(portalUrl)
   }
 
   return (
@@ -227,7 +230,7 @@ export function Sidebar() {
       <div className="p-4 border-t space-y-1">
         {/* 切換到學習平台 */}
         <Link
-          href="http://localhost:3002/dashboard"
+          href={`${learningUrl}/dashboard`}
           className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-600 rounded-lg hover:bg-gray-100"
         >
           <GraduationCap className="w-5 h-5 mr-3 text-indigo-600" />

@@ -94,8 +94,11 @@ export function Sidebar() {
   const handleLogout = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
-    router.push("http://localhost:3000")
+    const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || "http://localhost:3000"
+    router.push(portalUrl)
   }
+
+  const lifeUrl = process.env.NEXT_PUBLIC_LIFE_URL || "http://localhost:3001"
 
   return (
     <aside
@@ -202,7 +205,7 @@ export function Sidebar() {
       <div className="border-t border-gray-200 p-2 space-y-1">
         {/* 切換到生活平台 */}
         <Link
-          href="http://localhost:3001/dashboard"
+          href={`${lifeUrl}/dashboard`}
           className={cn(
             "flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors",
             collapsed && "justify-center"

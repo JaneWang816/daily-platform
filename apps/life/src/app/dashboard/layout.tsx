@@ -16,12 +16,14 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true)
   const [authenticated, setAuthenticated] = useState(false)
 
+  const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || "http://localhost:3000"
+
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       
       if (!session) {
-        router.push("http://localhost:3000")
+        router.push(portalUrl)
       } else {
         setAuthenticated(true)
       }
@@ -33,13 +35,13 @@ export default function DashboardLayout({
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event) => {
         if (event === "SIGNED_OUT") {
-          router.push("http://localhost:3000")
+          router.push(portalUrl)
         }
       }
     )
 
     return () => subscription.unsubscribe()
-  }, [router])
+  }, [router, portalUrl])
 
   if (loading) {
     return (
