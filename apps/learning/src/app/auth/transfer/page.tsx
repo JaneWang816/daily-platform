@@ -4,8 +4,12 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@daily/database/client'
+import { Suspense } from 'react'
 
-export default function AuthTransferPage() {
+// 禁止預渲染
+export const dynamic = 'force-dynamic'
+
+function TransferContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
@@ -66,5 +70,17 @@ export default function AuthTransferPage() {
         )}
       </div>
     </main>
+  )
+}
+
+export default function AuthTransferPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen flex items-center justify-center p-4">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </main>
+    }>
+      <TransferContent />
+    </Suspense>
   )
 }
