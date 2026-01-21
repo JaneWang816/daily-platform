@@ -78,6 +78,9 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
+  const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || "http://localhost:3000"
+  const lifeUrl = process.env.NEXT_PUBLIC_LIFE_URL || "http://localhost:3001"
+
   const toggleExpand = (title: string) => {
     setExpandedItems((prev) =>
       prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]
@@ -94,11 +97,22 @@ export function Sidebar() {
   const handleLogout = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
-    const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || "http://localhost:3000"
-    router.push(portalUrl)
+    window.location.href = portalUrl
   }
 
-  const lifeUrl = process.env.NEXT_PUBLIC_LIFE_URL || "http://localhost:3001"
+  // 切換到生活平台（使用 token transfer）
+  const handleSwitchToLife = async () => {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      window.location.href = portalUrl
+      return
+    }
+
+    const transferUrl = `${lifeUrl}/auth/transfer?access_token=${session.access_token}&refresh_token=${session.refresh_token}`
+    window.location.href = transferUrl
+  }
 
   return (
     <aside
@@ -204,17 +218,17 @@ export function Sidebar() {
       {/* 底部：切換平台 + 登出 */}
       <div className="border-t border-gray-200 p-2 space-y-1">
         {/* 切換到生活平台 */}
-        <Link
-          href={`${lifeUrl}/dashboard`}
+        <button
+          onClick={handleSwitchToLife}
           className={cn(
-            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors",
+            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors w-full",
             collapsed && "justify-center"
           )}
           title={collapsed ? "切換到生活平台" : undefined}
         >
           <Leaf className="w-5 h-5 text-green-600 flex-shrink-0" />
           {!collapsed && <span>切換到生活平台</span>}
-        </Link>
+        </button>
 
         {/* 登出 */}
         <button

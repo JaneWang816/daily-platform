@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@daily/database/client"
 import { Sidebar, BottomNav, Header } from "@/components/layout"
 
 export default function DashboardLayout({
@@ -16,14 +16,15 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true)
   const [authenticated, setAuthenticated] = useState(false)
 
+  const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || 'http://localhost:3000'
+
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       
       if (!session) {
-        // 未登入跳轉到 Portal
-        const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || 'http://localhost:3000'
-        window.location.href = portalUrl
+        // 未登入跳轉到 Portal 登入頁
+        window.location.href = `${portalUrl}/login`
       } else {
         setAuthenticated(true)
       }
@@ -35,14 +36,13 @@ export default function DashboardLayout({
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event) => {
         if (event === "SIGNED_OUT") {
-          const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || 'http://localhost:3000'
           window.location.href = portalUrl
         }
       }
     )
 
     return () => subscription.unsubscribe()
-  }, [router])
+  }, [portalUrl])
 
   if (loading) {
     return (

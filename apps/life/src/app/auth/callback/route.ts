@@ -1,4 +1,4 @@
-//apps/learning/src/app/auth/callback/route.ts
+//apps/life/src/app/auth/callback/route.ts
 import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@daily/database/server"
 

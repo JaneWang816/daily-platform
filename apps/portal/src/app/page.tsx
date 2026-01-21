@@ -1,13 +1,60 @@
 // apps/portal/src/app/page.tsx
-import { Button } from '@daily/ui'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@daily/ui'
-import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Card, CardDescription, CardHeader, CardTitle } from '@daily/ui'
+import { createClient } from '@daily/database/client'
 import { LogoutButton } from './logout-button'
 
-export default async function HomePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export default function HomePage() {
+  const router = useRouter()
+  const [user, setUser] = useState<{ email?: string } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        router.push('/login')
+        return
+      }
+      
+      setUser(user)
+      setLoading(false)
+    }
+    
+    checkUser()
+  }, [router])
+
+  const handleNavigate = async (platform: 'life' | 'learning') => {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      router.push('/login')
+      return
+    }
+
+    const baseUrl = platform === 'life' 
+      ? (process.env.NEXT_PUBLIC_LIFE_URL || 'http://localhost:3001')
+      : (process.env.NEXT_PUBLIC_LEARNING_URL || 'http://localhost:3002')
+
+    // 跳轉到目標平台的 auth/transfer 頁面，帶上 token
+    const transferUrl = `${baseUrl}/auth/transfer?access_token=${session.access_token}&refresh_token=${session.refresh_token}`
+    
+    window.location.href = transferUrl
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </main>
+    )
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
@@ -20,7 +67,7 @@ export default async function HomePage() {
 
         {/* 平台選擇卡片 */}
         <div className="grid gap-4">
-          <Link href={process.env.NEXT_PUBLIC_LIFE_URL || 'http://localhost:3001'}>
+          <button onClick={() => handleNavigate('life')} className="text-left">
             <Card className="cursor-pointer hover:border-primary transition-colors">
               <CardHeader>
                 <CardTitle>🌿 生活管理</CardTitle>
@@ -29,9 +76,9 @@ export default async function HomePage() {
                 </CardDescription>
               </CardHeader>
             </Card>
-          </Link>
+          </button>
 
-          <Link href={process.env.NEXT_PUBLIC_LEARNING_URL || 'http://localhost:3002'}>
+          <button onClick={() => handleNavigate('learning')} className="text-left">
             <Card className="cursor-pointer hover:border-primary transition-colors">
               <CardHeader>
                 <CardTitle>📚 學習平台</CardTitle>
@@ -40,7 +87,7 @@ export default async function HomePage() {
                 </CardDescription>
               </CardHeader>
             </Card>
-          </Link>
+          </button>
         </div>
 
         {/* 用戶資訊 & 登出 */}

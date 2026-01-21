@@ -23,7 +23,8 @@ export default function DashboardLayout({
       const { data: { session } } = await supabase.auth.getSession()
       
       if (!session) {
-        router.push(portalUrl)
+        // 未登入，導向 Portal 登入頁
+        window.location.href = `${portalUrl}/login`
       } else {
         setAuthenticated(true)
       }
@@ -35,13 +36,13 @@ export default function DashboardLayout({
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event) => {
         if (event === "SIGNED_OUT") {
-          router.push(portalUrl)
+          window.location.href = portalUrl
         }
       }
     )
 
     return () => subscription.unsubscribe()
-  }, [router, portalUrl])
+  }, [portalUrl])
 
   if (loading) {
     return (

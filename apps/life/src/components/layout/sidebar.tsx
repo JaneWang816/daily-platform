@@ -151,7 +151,20 @@ export function Sidebar() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push(portalUrl)
+    window.location.href = portalUrl
+  }
+
+  // 切換到學習平台（使用 token transfer）
+  const handleSwitchToLearning = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      window.location.href = portalUrl
+      return
+    }
+
+    const transferUrl = `${learningUrl}/auth/transfer?access_token=${session.access_token}&refresh_token=${session.refresh_token}`
+    window.location.href = transferUrl
   }
 
   return (
@@ -229,13 +242,13 @@ export function Sidebar() {
       {/* 底部：切換平台 + 登出 */}
       <div className="p-4 border-t space-y-1">
         {/* 切換到學習平台 */}
-        <Link
-          href={`${learningUrl}/dashboard`}
+        <button
+          onClick={handleSwitchToLearning}
           className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-600 rounded-lg hover:bg-gray-100"
         >
           <GraduationCap className="w-5 h-5 mr-3 text-indigo-600" />
           切換到學習平台
-        </Link>
+        </button>
 
         {/* 登出 */}
         <button
