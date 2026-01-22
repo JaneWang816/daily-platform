@@ -56,6 +56,7 @@ interface Flashcard {
   deck_id: string | null
   front: string
   back: string
+  note: string | null
   ease_factor: number | null
   interval: number | null
   repetition_count: number | null
@@ -82,6 +83,7 @@ export default function DeckDetailPage() {
   // 表單狀態
   const [front, setFront] = useState("")
   const [back, setBack] = useState("")
+  const [notes, setNotes] = useState("") 
   const [saving, setSaving] = useState(false)
 
   // 下拉選單狀態
@@ -131,6 +133,7 @@ export default function DeckDetailPage() {
   const resetForm = () => {
     setFront("")
     setBack("")
+    setNotes("")
     setEditingCard(null)
   }
 
@@ -143,6 +146,7 @@ export default function DeckDetailPage() {
     setEditingCard(card)
     setFront(card.front)
     setBack(card.back)
+    setNotes(card.note || "")
     setDialogOpen(true)
     setOpenMenuId(null)
   }
@@ -167,6 +171,7 @@ export default function DeckDetailPage() {
         .update({
           front: front.trim(),
           back: back.trim(),
+          note: notes.trim() || null,
         })
         .eq("id", editingCard.id)
     } else {
@@ -177,6 +182,7 @@ export default function DeckDetailPage() {
           deck_id: deckId,
           front: front.trim(),
           back: back.trim(),
+          note: notes.trim() || null,
           ease_factor: 2.5,
           interval: 0,
           repetition_count: 0,
@@ -512,6 +518,27 @@ export default function DeckDetailPage() {
                 value={back}
                 onChange={(e) => setBack(e.target.value)}
                 placeholder="例如：蘋果"
+                rows={2}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>備註（例句）</Label>
+                {notes.trim() && deck?.back_lang && deck.back_lang !== "none" && (
+                  <button
+                    type="button"
+                    onClick={() => handleSpeak(notes, deck.back_lang)}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                  >
+                    <Volume2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="例如：I eat an apple every day."
                 rows={2}
               />
             </div>

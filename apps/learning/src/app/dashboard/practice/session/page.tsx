@@ -1,7 +1,7 @@
 // apps/learning/src/app/dashboard/practice/session/page.tsx
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
@@ -43,7 +43,12 @@ interface PracticeResult {
   isCorrect: boolean
 }
 
-export default function PracticeSessionPage() {
+// 取得本地日期字串 YYYY-MM-DD
+const getLocalDateString = (date: Date = new Date()) => {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function PracticeSessionContent() {
   const searchParams = useSearchParams()
   const subjectId = searchParams.get("subject")
   const mode = searchParams.get("mode") || "all" // all, mistakes
@@ -97,6 +102,62 @@ export default function PracticeSessionPage() {
 
     setLoading(false)
   }, [subjectId, mode])
+
+  // 更新學習紀錄（每次答題呼叫一次，count=1）
+  const updateStudyLog = async (count: number) => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // 使用本地日期
+      const today = getLocalDateString()
+
+      // 使用 maybeSingle() 避免找不到時報錯
+      const { data: existing, error: selectError } = await supabase
+        .from("study_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("study_date", today)
+        .maybeSingle()
+
+      if (selectError) {
+        console.error("updateStudyLog select error:", selectError)
+        return
+      }
+
+      if (existing) {
+        // 更新現有紀錄
+        const { error: updateError } = await (supabase.from("study_logs") as any)
+          .update({
+            questions_practiced: (existing.questions_practiced || 0) + count,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id)
+
+        if (updateError) {
+          console.error("updateStudyLog update error:", updateError)
+        }
+      } else {
+        // 新增紀錄
+        const { error: insertError } = await (supabase.from("study_logs") as any)
+          .insert({
+            user_id: user.id,
+            study_date: today,
+            questions_practiced: count,
+            flashcards_reviewed: 0,
+            study_minutes: 0,
+            pomodoro_sessions: 0,
+          })
+
+        if (insertError) {
+          console.error("updateStudyLog insert error:", insertError)
+        }
+      }
+    } catch (err) {
+      console.error("updateStudyLog exception:", err)
+    }
+  }
 
   useEffect(() => {
     fetchQuestions()
@@ -181,6 +242,9 @@ export default function PracticeSessionPage() {
         last_attempted_at: new Date().toISOString(),
       })
       .eq("id", currentQuestion.id)
+
+    // 每次答題都寫入學習紀錄（+1）
+    await updateStudyLog(1)
   }
 
   const nextQuestion = () => {
@@ -252,30 +316,45 @@ export default function PracticeSessionPage() {
   // 完成畫面
   if (isComplete) {
     const correctCount = results.filter((r) => r.isCorrect).length
-    const accuracy = Math.round((correctCount / results.length) * 100)
+    const accuracy = results.length > 0 ? Math.round((correctCount / results.length) * 100) : 0
 
     return (
-      <div className="max-w-2xl mx-auto py-12">
+      <div className="max-w-lg mx-auto py-12">
         <Card>
-          <CardContent className="p-8">
-            <div className="text-center mb-8">
-              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Trophy className="w-10 h-10 text-green-600" />
+          <CardContent className="p-8 text-center">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trophy className="w-10 h-10 text-green-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">練習完成！</h1>
+            <p className="text-gray-600 mb-6">
+              你完成了 {results.length} 道題目
+            </p>
+
+            {/* 統計 */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-2xl font-bold text-gray-800">{results.length}</p>
+                <p className="text-sm text-gray-500">總題數</p>
               </div>
-              <h1 className="text-2xl font-bold text-gray-800 mb-2">練習完成！</h1>
-              <p className="text-gray-600">
-                正確率 {accuracy}% ({correctCount}/{results.length})
-              </p>
+              <div className="p-4 bg-green-50 rounded-lg">
+                <p className="text-2xl font-bold text-green-600">{correctCount}</p>
+                <p className="text-sm text-gray-500">正確</p>
+              </div>
+              <div className="p-4 bg-red-50 rounded-lg">
+                <p className="text-2xl font-bold text-red-600">{results.length - correctCount}</p>
+                <p className="text-sm text-gray-500">錯誤</p>
+              </div>
             </div>
 
-            {/* 進度條 */}
+            {/* 正確率 */}
             <div className="mb-8">
-              <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-green-500 transition-all"
                   style={{ width: `${accuracy}%` }}
                 />
               </div>
+              <p className="text-sm text-gray-500 mt-2">正確率 {accuracy}%</p>
             </div>
 
             {/* 詳細結果 */}
@@ -516,5 +595,20 @@ export default function PracticeSessionPage() {
         </span>
       </div>
     </div>
+  )
+}
+
+// 禁止預渲染
+export const dynamic = 'force-dynamic'
+
+export default function PracticeSessionPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <PracticeSessionContent />
+    </Suspense>
   )
 }

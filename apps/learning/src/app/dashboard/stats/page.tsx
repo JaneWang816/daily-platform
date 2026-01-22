@@ -14,7 +14,6 @@ import {
   BookOpen,
   FileQuestion,
   Lightbulb,
-  CheckCircle,
 } from "lucide-react"
 
 interface StudyStats {
@@ -49,6 +48,17 @@ interface WeeklyData {
 }
 
 const DAYS = ["日", "一", "二", "三", "四", "五", "六"]
+
+// 取得本地日期字串 YYYY-MM-DD
+const getLocalDateString = (date: Date = new Date()) => {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+// 解析日期字串為本地日期（避免時區問題）
+const parseLocalDate = (dateStr: string) => {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
 
 export default function StatsPage() {
   const [stats, setStats] = useState<StudyStats | null>(null)
@@ -93,12 +103,12 @@ export default function StatsPage() {
       .select("*", { count: "exact", head: true })
       .eq("user_id", user.id)
 
-    // 取得學習紀錄（使用 daily_study_summary）
+    // 取得學習紀錄（使用 study_logs）
     const { data: studyLogs } = await supabase
-      .from("daily_study_summary")
+      .from("study_logs")
       .select("*")
       .eq("user_id", user.id)
-      .order("date", { ascending: false })
+      .order("study_date", { ascending: false })
       .limit(30)
 
     // 計算連續學習天數
@@ -110,11 +120,11 @@ export default function StatsPage() {
 
     if (studyLogs && studyLogs.length > 0) {
       const sortedLogs = [...studyLogs].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        (a, b) => parseLocalDate(b.study_date).getTime() - parseLocalDate(a.study_date).getTime()
       )
 
       // 檢查今天或昨天是否有學習
-      const latestDate = new Date(sortedLogs[0].date)
+      const latestDate = parseLocalDate(sortedLogs[0].study_date)
       latestDate.setHours(0, 0, 0, 0)
       const diffDays = Math.floor((today.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -123,7 +133,7 @@ export default function StatsPage() {
         let prevDate = latestDate
 
         for (let i = 1; i < sortedLogs.length; i++) {
-          const logDate = new Date(sortedLogs[i].date)
+          const logDate = parseLocalDate(sortedLogs[i].study_date)
           logDate.setHours(0, 0, 0, 0)
           const dayDiff = Math.floor((prevDate.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -139,8 +149,8 @@ export default function StatsPage() {
       // 計算最長連續
       tempStreak = 1
       for (let i = 0; i < sortedLogs.length - 1; i++) {
-        const currDate = new Date(sortedLogs[i].date)
-        const nextDate = new Date(sortedLogs[i + 1].date)
+        const currDate = parseLocalDate(sortedLogs[i].study_date)
+        const nextDate = parseLocalDate(sortedLogs[i + 1].study_date)
         currDate.setHours(0, 0, 0, 0)
         nextDate.setHours(0, 0, 0, 0)
         const diff = Math.floor((currDate.getTime() - nextDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -155,22 +165,22 @@ export default function StatsPage() {
       longestStreak = Math.max(longestStreak, tempStreak, currentStreak)
     }
 
-    // 今日統計
-    const todayStr = today.toISOString().split("T")[0]
-    const todayLog = studyLogs?.find((log) => log.date === todayStr)
+    // 今日統計（使用本地日期）
+    const todayStr = getLocalDateString()
+    const todayLog = studyLogs?.find((log) => log.study_date === todayStr)
 
     // 每週統計
     const weekData: WeeklyData[] = []
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today)
       date.setDate(date.getDate() - i)
-      const dateStr = date.toISOString().split("T")[0]
-      const log = studyLogs?.find((l) => l.date === dateStr)
+      const dateStr = getLocalDateString(date)
+      const log = studyLogs?.find((l) => l.study_date === dateStr)
       
       weekData.push({
         day: DAYS[date.getDay()],
-        questions: log?.question_practiced || 0,
-        flashcards: log?.flashcard_reviewed || 0,
+        questions: log?.questions_practiced || 0,
+        flashcards: log?.flashcards_reviewed || 0,
       })
     }
     setWeeklyData(weekData)
@@ -186,8 +196,8 @@ export default function StatsPage() {
       flashcardsMastered,
       currentStreak,
       longestStreak,
-      todayQuestions: todayLog?.question_practiced || 0,
-      todayFlashcards: todayLog?.flashcard_reviewed || 0,
+      todayQuestions: todayLog?.questions_practiced || 0,
+      todayFlashcards: todayLog?.flashcards_reviewed || 0,
       todayStudyTime: todayLog?.study_minutes || 0,
     })
 

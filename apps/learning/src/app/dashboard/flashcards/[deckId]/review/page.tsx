@@ -31,6 +31,7 @@ interface Flashcard {
   deck_id: string | null
   front: string
   back: string
+  note: string | null
   ease_factor: number | null
   interval: number | null
   repetition_count: number | null
@@ -44,6 +45,11 @@ const RATING_BUTTONS = [
   { value: 3, label: "順答", bg: "#22c55e", hover: "#16a34a" },
   { value: 4, label: "秒答", bg: "#14b8a6", hover: "#0d9488" },
 ]
+
+// 取得本地日期字串 YYYY-MM-DD
+const getLocalDateString = (date: Date = new Date()) => {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 
 export default function ReviewPage() {
   const params = useParams()
@@ -98,6 +104,62 @@ export default function ReviewPage() {
     setLoading(false)
   }, [deckId])
 
+  // 更新學習紀錄（每次評分呼叫一次，count=1）
+  const updateStudyLog = async (count: number) => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // 使用本地日期
+      const today = getLocalDateString()
+
+      // 使用 maybeSingle() 避免找不到時報錯
+      const { data: existing, error: selectError } = await supabase
+        .from("study_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("study_date", today)
+        .maybeSingle()
+
+      if (selectError) {
+        console.error("updateStudyLog select error:", selectError)
+        return
+      }
+
+      if (existing) {
+        // 更新現有紀錄
+        const { error: updateError } = await (supabase.from("study_logs") as any)
+          .update({
+            flashcards_reviewed: (existing.flashcards_reviewed || 0) + count,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id)
+
+        if (updateError) {
+          console.error("updateStudyLog update error:", updateError)
+        }
+      } else {
+        // 新增紀錄
+        const { error: insertError } = await (supabase.from("study_logs") as any)
+          .insert({
+            user_id: user.id,
+            study_date: today,
+            flashcards_reviewed: count,
+            questions_practiced: 0,
+            study_minutes: 0,
+            pomodoro_sessions: 0,
+          })
+
+        if (insertError) {
+          console.error("updateStudyLog insert error:", insertError)
+        }
+      }
+    } catch (err) {
+      console.error("updateStudyLog exception:", err)
+    }
+  }
+
   useEffect(() => {
     fetchData()
   }, [fetchData])
@@ -132,6 +194,9 @@ export default function ReviewPage() {
         next_review_at: result.nextReview.toISOString(),
       })
       .eq("id", currentCard.id)
+
+    // 每次評分都寫入學習紀錄（+1）
+    await updateStudyLog(1)
 
     // 更新統計
     setStats((prev) => ({
@@ -296,6 +361,27 @@ export default function ReviewPage() {
             <p className="text-2xl text-center text-gray-800 mb-4 whitespace-pre-wrap">
               {isFlipped ? currentCard.back : currentCard.front}
             </p>
+
+            {/* 備註 (只在背面且有備註時顯示) */}
+            {isFlipped && currentCard.note && (
+              <div className="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200 max-w-md">
+                <div className="flex items-start gap-2">
+                  <Lightbulb className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap flex-1">{currentCard.note}</p>
+                  {deck?.back_lang && deck.back_lang !== "none" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleSpeak(currentCard.note!, deck.back_lang)
+                      }}
+                      className="p-1 rounded-full hover:bg-amber-100 text-amber-600 flex-shrink-0"
+                    >
+                      <Volume2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* 語音按鈕 */}
             <button

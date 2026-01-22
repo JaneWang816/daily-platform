@@ -48,7 +48,8 @@ export async function updateDailyStudySummary(update: UpdateType): Promise<boole
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return false
 
-    const today = new Date().toISOString().split("T")[0] // YYYY-MM-DD
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
     // 先嘗試取得今天的記錄
     const { data } = await supabase

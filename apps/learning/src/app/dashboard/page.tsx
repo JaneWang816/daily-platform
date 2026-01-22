@@ -92,7 +92,8 @@ export default function DashboardPage() {
         .gt("attempt_count", 0)
 
       // 取得今日學習時間
-      const today = new Date().toISOString().split("T")[0]
+      const now = new Date()
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
       const { data: todayStudy } = await supabase
         .from("daily_study_summary")
         .select("study_minutes")
