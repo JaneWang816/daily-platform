@@ -19,6 +19,8 @@ import {
   Settings,
   Download,
   Target,
+  GraduationCap,
+  LogOut,
 } from "lucide-react"
 
 type ModuleType = 'journal' | 'habits' | 'tasks' | 'schedule' | 'health' | 'finance' | 'study'
@@ -52,6 +54,9 @@ export function BottomNav() {
   const supabase = createClient()
   const [enabledModules, setEnabledModules] = useState<ModuleType[]>([])
   const [showMore, setShowMore] = useState(false)
+
+  const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || "http://localhost:3000"
+  const learningUrl = process.env.NEXT_PUBLIC_LEARNING_URL || "http://localhost:3002"
 
   useEffect(() => {
     const loadEnabledModules = async () => {
@@ -90,13 +95,36 @@ export function BottomNav() {
 
   const isMoreActive = moreItems.some((item) => isActive(item.href))
 
+  // 切換到學習平台
+  const handleSwitchToLearning = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      window.location.href = portalUrl
+      return
+    }
+
+    const transferUrl = `${learningUrl}/auth/transfer?access_token=${session.access_token}&refresh_token=${session.refresh_token}`
+    window.location.href = transferUrl
+  }
+
+  // 登出
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = portalUrl
+  }
+
   return (
     <>
       {showMore && (
         <>
-          <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setShowMore(false)} />
+          <div 
+            className="fixed inset-0 bg-black/20 z-40" 
+            onClick={() => setShowMore(false)} 
+          />
           <div className="fixed bottom-16 left-0 right-0 bg-white border-t rounded-t-xl shadow-lg z-50 p-4">
-            <div className="grid grid-cols-4 gap-4">
+            {/* 功能項目 */}
+            <div className="grid grid-cols-4 gap-4 mb-4">
               {moreItems.map((item) => {
                 const active = isActive(item.href)
                 return (
@@ -114,6 +142,29 @@ export function BottomNav() {
                   </Link>
                 )
               })}
+            </div>
+
+            {/* 分隔線 */}
+            <div className="border-t border-gray-200 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                {/* 切換到學習平台 */}
+                <button
+                  onClick={handleSwitchToLearning}
+                  className="flex flex-col items-center justify-center p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                >
+                  <GraduationCap className="w-6 h-6 text-indigo-600" />
+                  <span className="mt-1 text-xs">學習平台</span>
+                </button>
+
+                {/* 登出 */}
+                <button
+                  onClick={handleLogout}
+                  className="flex flex-col items-center justify-center p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                >
+                  <LogOut className="w-6 h-6 text-gray-400" />
+                  <span className="mt-1 text-xs">登出</span>
+                </button>
+              </div>
             </div>
           </div>
         </>

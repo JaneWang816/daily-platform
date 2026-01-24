@@ -927,6 +927,143 @@ export type Database = {
         }
         Relationships: []
       }
+      learning_portfolio_links: {
+        Row: {
+          created_at: string | null
+          id: string
+          link_type: string | null
+          portfolio_id: string
+          title: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          link_type?: string | null
+          portfolio_id: string
+          title?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          link_type?: string | null
+          portfolio_id?: string
+          title?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_portfolio_links_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "learning_portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_portfolio_units: {
+        Row: {
+          created_at: string | null
+          id: string
+          portfolio_id: string
+          unit_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          portfolio_id: string
+          unit_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          portfolio_id?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_portfolio_units_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "learning_portfolios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learning_portfolio_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_portfolios: {
+        Row: {
+          content: Json
+          created_at: string | null
+          duration_minutes: number | null
+          id: string
+          location: string | null
+          log_type: string
+          photos: string[] | null
+          reflection: string | null
+          study_date: string
+          subject_id: string
+          title: string
+          topic_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content?: Json
+          created_at?: string | null
+          duration_minutes?: number | null
+          id?: string
+          location?: string | null
+          log_type: string
+          photos?: string[] | null
+          reflection?: string | null
+          study_date?: string
+          subject_id: string
+          title: string
+          topic_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string | null
+          duration_minutes?: number | null
+          id?: string
+          location?: string | null
+          log_type?: string
+          photos?: string[] | null
+          reflection?: string | null
+          study_date?: string
+          subject_id?: string
+          title?: string
+          topic_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_portfolios_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learning_portfolios_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       note_links: {
         Row: {
           created_at: string | null
@@ -1238,6 +1375,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      study_logs: {
+        Row: {
+          created_at: string | null
+          flashcards_reviewed: number | null
+          id: string
+          pomodoro_sessions: number | null
+          questions_practiced: number | null
+          study_date: string
+          study_minutes: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          flashcards_reviewed?: number | null
+          id?: string
+          pomodoro_sessions?: number | null
+          questions_practiced?: number | null
+          study_date: string
+          study_minutes?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          flashcards_reviewed?: number | null
+          id?: string
+          pomodoro_sessions?: number | null
+          questions_practiced?: number | null
+          study_date?: string
+          study_minutes?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       subjects: {
         Row: {
