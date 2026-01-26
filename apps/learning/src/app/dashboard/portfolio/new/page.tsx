@@ -467,7 +467,7 @@ export default function NewPortfolioPage() {
         // @ts-expect-error - Supabase SSR 類型推斷問題，資料已由 TablesInsert 驗證
         .insert(portfolioData)
         .select()
-        .single()
+        .single() as { data: { id: string } | null; error: Error | null }
 
       if (portfolioError || !portfolio) {
         console.error("Error creating portfolio:", portfolioError)
