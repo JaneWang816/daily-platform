@@ -11,7 +11,6 @@ import {
   Button,
   Input,
   Label,
-  Textarea,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -28,7 +27,6 @@ import {
 } from "@daily/ui"
 import {
   Plus,
-  ChevronLeft,
   ChevronRight,
   MoreVertical,
   Pencil,
@@ -47,7 +45,6 @@ interface Subject {
 interface Topic {
   id: string
   title: string
-  description: string | null
   subject_id: string
   order: number | null
   user_id: string
@@ -70,7 +67,6 @@ export default function TopicsPage() {
 
   // 表單狀態
   const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
   const [saving, setSaving] = useState(false)
 
   // 下拉選單狀態
@@ -95,7 +91,7 @@ export default function TopicsPage() {
     // 取得主題列表
     const { data: topicsData } = await supabase
       .from("topics")
-      .select("*")
+      .select("id, title, subject_id, order, user_id")
       .eq("subject_id", subjectId)
       .order("order", { ascending: true })
 
@@ -122,7 +118,6 @@ export default function TopicsPage() {
 
   const resetForm = () => {
     setTitle("")
-    setDescription("")
     setEditingTopic(null)
   }
 
@@ -134,7 +129,6 @@ export default function TopicsPage() {
   const openEditDialog = (topic: Topic) => {
     setEditingTopic(topic)
     setTitle(topic.title)
-    setDescription(topic.description || "")
     setDialogOpen(true)
     setOpenMenuId(null)
   }
@@ -158,7 +152,6 @@ export default function TopicsPage() {
       await (supabase.from("topics") as any)
         .update({
           title: title.trim(),
-          description: description.trim() || null,
         })
         .eq("id", editingTopic.id)
     } else {
@@ -179,7 +172,6 @@ export default function TopicsPage() {
           user_id: user.id,
           subject_id: subjectId,
           title: title.trim(),
-          description: description.trim() || null,
           order: newOrder,
         })
     }
@@ -301,9 +293,7 @@ export default function TopicsPage() {
                     {/* 內容 */}
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-gray-800">{topic.title}</h3>
-                      {topic.description && (
-                        <p className="text-sm text-gray-500 truncate">{topic.description}</p>
-                      )}
+                      <p className="text-sm text-gray-500">點擊查看單元</p>
                     </div>
 
                     {/* 單元數 */}
@@ -376,27 +366,17 @@ export default function TopicsPage() {
               {editingTopic ? "編輯主題" : "新增主題"}
             </DialogTitle>
             <DialogDescription>
-              {editingTopic ? "修改主題資訊" : "在此科目下建立新的主題"}
+              {editingTopic ? "修改主題名稱" : "建立新的學習主題或章節"}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label>主題名稱</Label>
+              <Label>主題名稱 *</Label>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="例如：第一章、代數基礎..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>描述（選填）</Label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="簡短描述這個主題的內容..."
-                rows={3}
               />
             </div>
 

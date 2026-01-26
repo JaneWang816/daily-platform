@@ -18,6 +18,7 @@ import {
   Settings,
   Leaf,
   LogOut,
+  FolderOpen,  // 新增：學習歷程圖示
 } from "lucide-react"
 
 const mainNavItems = [
@@ -28,6 +29,7 @@ const mainNavItems = [
 ]
 
 const moreNavItems = [
+  { title: "學習歷程", href: "/dashboard/portfolio", icon: FolderOpen },  // 新增
   { title: "番茄鐘", href: "/dashboard/pomodoro", icon: Timer },
   { title: "錯題本", href: "/dashboard/mistakes", icon: XCircle },
   { title: "統計", href: "/dashboard/stats", icon: BarChart2 },

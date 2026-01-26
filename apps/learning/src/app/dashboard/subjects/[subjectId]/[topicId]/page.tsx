@@ -47,7 +47,6 @@ interface Subject {
 interface Topic {
   id: string
   title: string
-  description: string | null
   subject_id: string
 }
 
@@ -104,7 +103,7 @@ export default function UnitsPage() {
     // 取得主題資訊
     const { data: topicData } = await supabase
       .from("topics")
-      .select("*")
+      .select("id, title, subject_id")
       .eq("id", topicId)
       .single()
 
@@ -274,9 +273,6 @@ export default function UnitsPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-800">{topic.title}</h1>
-              {topic.description && (
-                <p className="text-gray-600 text-sm">{topic.description}</p>
-              )}
             </div>
           </div>
           <Button onClick={openCreateDialog} className="bg-indigo-600 hover:bg-indigo-700">

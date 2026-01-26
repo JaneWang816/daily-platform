@@ -28,3 +28,8 @@ export type Unit = Tables<'units'>
 export type Deck = Tables<'decks'>
 export type Flashcard = Tables<'flashcards'>
 export type Question = Tables<'questions'>
+
+// 學習歷程相關
+export type LearningPortfolio = Tables<'learning_portfolios'>
+export type LearningPortfolioLink = Tables<'learning_portfolio_links'>
+export type LearningPortfolioUnit = Tables<'learning_portfolio_units'>

@@ -1,3 +1,4 @@
+// apps/learning/src/components/layout/sidebar.tsx
 "use client"
 
 import { useState } from "react"
@@ -20,6 +21,7 @@ import {
   ChevronRight,
   LogOut,
   Leaf,
+  FolderOpen,  // 新增：學習歷程圖示
 } from "lucide-react"
 
 interface NavItem {
@@ -39,6 +41,11 @@ const navItems: NavItem[] = [
     title: "科目管理",
     href: "/dashboard/subjects",
     icon: BookOpen,
+  },
+  {
+    title: "學習歷程",  // 新增
+    href: "/dashboard/portfolio",
+    icon: FolderOpen,
   },
   {
     title: "題庫練習",

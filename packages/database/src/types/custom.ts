@@ -1,5 +1,5 @@
 // types/custom.ts
-// 自定義類型與便利類型別名
+// 自定義類型與便利類型別名
 
 import type { Tables, TablesInsert, TablesUpdate } from "./database.types"
 
@@ -39,6 +39,11 @@ export type Question = Tables<'questions'>
 export type QuestionType = Tables<'question_types'>
 export type QuestionTopic = Tables<'question_topics'>
 export type DailyStudySummary = Tables<'daily_study_summary'>
+
+// 學習歷程相關
+export type LearningPortfolio = Tables<'learning_portfolios'>
+export type LearningPortfolioUnit = Tables<'learning_portfolio_units'>
+export type LearningPortfolioLink = Tables<'learning_portfolio_links'>
 
 // ============================================
 // 筆記相關類型
@@ -120,6 +125,67 @@ export type DailyPlan = {
 }
 
 // ============================================
+// 學習歷程相關類型
+// ============================================
+
+// 學習歷程類型
+export type PortfolioLogType = 'study' | 'experiment' | 'visit' | 'reading' | 'reflection'
+
+// 參考連結類型
+export type PortfolioLinkType = 'website' | 'video' | 'article' | 'document'
+
+// 學習歷程內容結構（依類型不同）
+export type PortfolioContentStudy = {
+  key_points?: string[]      // 學習重點
+  difficulties?: string[]    // 遇到的困難
+  solutions?: string[]       // 解決方法
+}
+
+export type PortfolioContentExperiment = {
+  objective?: string         // 實驗目的
+  materials?: string[]       // 實驗材料
+  procedure?: string[]       // 實驗步驟
+  observations?: string      // 觀察結果
+  conclusion?: string        // 結論
+}
+
+export type PortfolioContentVisit = {
+  purpose?: string           // 參訪目的
+  highlights?: string[]      // 重點收穫
+  impressions?: string       // 心得感想
+}
+
+export type PortfolioContentReading = {
+  book_title?: string        // 書名/文章名
+  author?: string            // 作者
+  key_quotes?: string[]      // 重要摘錄
+  takeaways?: string[]       // 收穫心得
+}
+
+export type PortfolioContentReflection = {
+  achievements?: string[]    // 學習成就
+  challenges?: string[]      // 遭遇挑戰
+  improvements?: string[]    // 改進方向
+  next_steps?: string[]      // 下一步計畫
+}
+
+export type PortfolioContent = 
+  | PortfolioContentStudy 
+  | PortfolioContentExperiment 
+  | PortfolioContentVisit 
+  | PortfolioContentReading 
+  | PortfolioContentReflection
+
+// 學習歷程含關聯資料
+export type LearningPortfolioWithRelations = LearningPortfolio & {
+  subject?: { id: string; title: string } | null
+  topic?: { id: string; title: string } | null
+  units?: { id: string; title: string }[]
+  links?: LearningPortfolioLink[]
+  link_count?: number
+}
+
+// ============================================
 // 便利類型別名 - Insert (新增)
 // ============================================
 export type TaskInsert = TablesInsert<'tasks'>
@@ -142,6 +208,11 @@ export type UnitInsert = TablesInsert<'units'>
 export type QuestionInsert = TablesInsert<'questions'>
 export type QuestionTopicInsert = TablesInsert<'question_topics'>
 export type DailyStudySummaryInsert = TablesInsert<'daily_study_summary'>
+
+// 學習歷程 Insert
+export type LearningPortfolioInsert = TablesInsert<'learning_portfolios'>
+export type LearningPortfolioUnitInsert = TablesInsert<'learning_portfolio_units'>
+export type LearningPortfolioLinkInsert = TablesInsert<'learning_portfolio_links'>
 
 // ============================================
 // 便利類型別名 - Update (更新)
@@ -167,6 +238,11 @@ export type QuestionUpdate = TablesUpdate<'questions'>
 export type QuestionTopicUpdate = TablesUpdate<'question_topics'>
 export type DailyStudySummaryUpdate = TablesUpdate<'daily_study_summary'>
 
+// 學習歷程 Update
+export type LearningPortfolioUpdate = TablesUpdate<'learning_portfolios'>
+export type LearningPortfolioUnitUpdate = TablesUpdate<'learning_portfolio_units'>
+export type LearningPortfolioLinkUpdate = TablesUpdate<'learning_portfolio_links'>
+
 // 單元筆記 Insert/Update
 export type UnitNoteInsert = Omit<UnitNote, 'id' | 'created_at' | 'updated_at'>
 export type UnitNoteUpdate = Partial<Omit<UnitNote, 'id' | 'user_id' | 'unit_id' | 'created_at' | 'updated_at'>>
@@ -186,7 +262,7 @@ export type HabitWithTodayLog = Habit & {
 // 任務含例行任務欄位
 export type TaskWithRecurrence = Task
 
-// 健康數值含脈搏欄位
+// 健康數值含脈搏欄位
 export type HealthMetricExtended = HealthMetric & {
   value_tertiary?: number | null
 }
@@ -230,7 +306,7 @@ export type TaskQuadrant =
   | 'delegate'      // 緊急不重要
   | 'eliminate'     // 不重要不緊急
 
-// 取得任務象限
+// 取得任務象限
 export function getTaskQuadrant(task: Task): TaskQuadrant {
   const isImportant = task.is_important ?? false
   const isUrgent = task.is_urgent ?? false
@@ -407,6 +483,45 @@ export const NOTE_CATEGORY_MAP: Record<NoteCategoryType, { label: string; color:
 }
 
 // ============================================
+// 學習歷程類型常數
+// ============================================
+export const PORTFOLIO_LOG_TYPES = [
+  { value: 'study', label: '課堂學習', icon: '📝', color: 'text-blue-600', bgColor: 'bg-blue-100' },
+  { value: 'experiment', label: '實驗記錄', icon: '🧪', color: 'text-green-600', bgColor: 'bg-green-100' },
+  { value: 'visit', label: '參訪活動', icon: '🏛️', color: 'text-purple-600', bgColor: 'bg-purple-100' },
+  { value: 'reading', label: '延伸閱讀', icon: '📖', color: 'text-amber-600', bgColor: 'bg-amber-100' },
+  { value: 'reflection', label: '反思統整', icon: '💭', color: 'text-pink-600', bgColor: 'bg-pink-100' },
+] as const
+
+export const PORTFOLIO_LOG_TYPE_MAP: Record<PortfolioLogType, { 
+  label: string
+  icon: string
+  color: string
+  bgColor: string 
+}> = {
+  study: { label: '課堂學習', icon: '📝', color: 'text-blue-600', bgColor: 'bg-blue-100' },
+  experiment: { label: '實驗記錄', icon: '🧪', color: 'text-green-600', bgColor: 'bg-green-100' },
+  visit: { label: '參訪活動', icon: '🏛️', color: 'text-purple-600', bgColor: 'bg-purple-100' },
+  reading: { label: '延伸閱讀', icon: '📖', color: 'text-amber-600', bgColor: 'bg-amber-100' },
+  reflection: { label: '反思統整', icon: '💭', color: 'text-pink-600', bgColor: 'bg-pink-100' },
+}
+
+// 參考連結類型常數
+export const PORTFOLIO_LINK_TYPES = [
+  { value: 'website', label: '網站', icon: '🌐' },
+  { value: 'video', label: '影片', icon: '🎬' },
+  { value: 'article', label: '文章', icon: '📄' },
+  { value: 'document', label: '文件', icon: '📁' },
+] as const
+
+export const PORTFOLIO_LINK_TYPE_MAP: Record<PortfolioLinkType, { label: string; icon: string }> = {
+  website: { label: '網站', icon: '🌐' },
+  video: { label: '影片', icon: '🎬' },
+  article: { label: '文章', icon: '📄' },
+  document: { label: '文件', icon: '📁' },
+}
+
+// ============================================
 // 目標相關類型
 // ============================================
 export type GoalType = "countdown" | "numeric" | "streak" | "count"
@@ -441,3 +556,34 @@ export type Goal = {
 
 export type GoalInsert = Omit<Goal, 'id' | 'created_at' | 'updated_at'>
 export type GoalUpdate = Partial<Omit<Goal, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+
+// ============================================
+// 輔助函數
+// ============================================
+
+// 格式化時長
+export function formatDuration(minutes: number | null | undefined): string {
+  if (!minutes) return ''
+  if (minutes < 60) return `${minutes}分鐘`
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  if (mins === 0) return `${hours}小時`
+  return `${hours}小時${mins}分鐘`
+}
+
+// 格式化日期為年月
+export function formatYearMonth(dateStr: string): string {
+  const date = new Date(dateStr)
+  return `${date.getFullYear()}年${date.getMonth() + 1}月`
+}
+
+// 格式化日期為 MM/DD
+export function formatDateShort(dateStr: string): string {
+  const date = new Date(dateStr)
+  return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`
+}
+
+// 格式化日期為 YYYY-MM-DD
+export function formatDateISO(date: Date): string {
+  return date.toISOString().split('T')[0]
+}

@@ -18,6 +18,15 @@ export async function middleware(request: NextRequest) {
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
   const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
 
+  // PWA / public assets 一律放行
+  if (
+    pathname.startsWith('/manifest') ||
+    pathname.startsWith('/icon-') ||
+    pathname === '/favicon.ico'
+  ) {
+    return NextResponse.next()
+  }
+  
   // 未登入用戶嘗試訪問保護路由 → 重定向到 Portal 登入頁
   if (isProtectedRoute && !user) {
     // 跳轉到 Portal 的登入頁
@@ -46,6 +55,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
