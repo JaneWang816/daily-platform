@@ -142,6 +142,23 @@ export default function ExportPortfolioPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+    // 定義查詢結果類型
+    type PortfolioQueryResult = {
+      id: string
+      title: string
+      study_date: string
+      log_type: string
+      content: { text?: string } | null
+      reflection: string | null
+      duration_minutes: number | null
+      location: string | null
+      photos: string[] | null
+      subject_id: string
+      subject: { id: string; title: string } | null
+      topic: { id: string; title: string } | null
+      links: { id: string; url: string; title: string | null; link_type: string | null }[]
+    }
+
     // 先取得歷程主資料和基本關聯
     const { data, error } = await supabase
       .from("learning_portfolios")
@@ -160,27 +177,31 @@ export default function ExportPortfolioPage() {
       return
     }
 
-    if (!data || data.length === 0) {
+    // 類型斷言
+    const portfolioData = (data || []) as PortfolioQueryResult[]
+
+    if (portfolioData.length === 0) {
       setPortfolios([])
       setLoading(false)
       return
     }
 
     // 取得所有歷程的關聯單元
-    const portfolioIds = data.map(p => p.id)
+    const portfolioIds = portfolioData.map(p => p.id)
     const { data: unitRelations } = await supabase
       .from("learning_portfolio_units")
       .select(`
         portfolio_id,
         unit:units(id, title)
       `)
-      .in("portfolio_id", portfolioIds) as {
-        data: { portfolio_id: string; unit: { id: string; title: string } | null }[] | null
-      }
+      .in("portfolio_id", portfolioIds)
+
+    // 類型斷言
+    const unitData = (unitRelations || []) as { portfolio_id: string; unit: { id: string; title: string } | null }[]
 
     // 組合資料
-    const portfoliosWithUnits: PortfolioForExport[] = data.map(portfolio => {
-      const portfolioUnits = (unitRelations || [])
+    const portfoliosWithUnits: PortfolioForExport[] = portfolioData.map(portfolio => {
+      const portfolioUnits = unitData
         .filter(ur => ur.portfolio_id === portfolio.id)
         .map(ur => ({ unit: ur.unit }))
 
@@ -189,15 +210,15 @@ export default function ExportPortfolioPage() {
         title: portfolio.title,
         study_date: portfolio.study_date,
         log_type: portfolio.log_type,
-        content: portfolio.content as { text?: string } | null,
+        content: portfolio.content,
         reflection: portfolio.reflection,
         duration_minutes: portfolio.duration_minutes,
         location: portfolio.location,
         photos: portfolio.photos,
         subject_id: portfolio.subject_id,
-        subject: portfolio.subject as { id: string; title: string } | null,
-        topic: portfolio.topic as { id: string; title: string } | null,
-        links: (portfolio.links || []) as { id: string; url: string; title: string | null; link_type: string | null }[],
+        subject: portfolio.subject,
+        topic: portfolio.topic,
+        links: portfolio.links || [],
         units: portfolioUnits,
       }
     })

@@ -1,7 +1,7 @@
 //apps/life/src/app/dashboard/goals/page.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { createBrowserClient } from '@supabase/ssr'
 import { 
@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
 } from "@daily/ui"
 import { cn } from "@daily/utils"
-import { format, differenceInDays, parseISO } from "date-fns"
+import { format, differenceInDays, parseISO, startOfDay, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns"
 import {
   ArrowLeft,
   Plus,
@@ -48,6 +48,8 @@ import {
   CheckCircle,
   MoreVertical,
   BarChart3,
+  Link as LinkIcon,
+  RefreshCw,
 } from "lucide-react"
 
 // ============================================
@@ -76,10 +78,27 @@ type Goal = {
   completed_at: string | null
   created_at: string | null
   updated_at: string | null
+  // 追蹤來源
+  track_source: string | null
+  track_config: TrackConfig | null
+}
+
+type Habit = {
+  id: string
+  title: string
+  icon: string | null
+}
+
+type TrackConfig = {
+  habit_id?: string
+  category_id?: string
+  target_value?: number
+  start_date?: string
 }
 
 type GoalType = "countdown" | "numeric" | "streak" | "count"
 type FilterType = "all" | "active" | "completed" | "paused"
+type TrackSource = "manual" | "habit" | "weight" | "finance_savings" | "finance_income" | "finance_expense" | "exercise_count" | "exercise_minutes" | "reading_books" | "water_days" | "sleep_days"
 
 // ============================================
 // 常數
@@ -89,6 +108,20 @@ const GOAL_TYPES = [
   { value: "numeric", label: "數值目標", icon: TrendingUp, description: "達成特定數值" },
   { value: "streak", label: "連續天數", icon: Flame, description: "連續完成某件事" },
   { value: "count", label: "累計次數", icon: Target, description: "累計達成次數" },
+]
+
+const TRACK_SOURCE_OPTIONS = [
+  { value: "manual", label: "手動更新", goalTypes: ["countdown", "numeric", "streak", "count"], description: "自行更新進度" },
+  { value: "habit", label: "習慣打卡", goalTypes: ["streak", "count"], description: "連結習慣自動計算" },
+  { value: "weight", label: "體重記錄", goalTypes: ["numeric"], description: "取最新體重數值" },
+  { value: "finance_savings", label: "累計儲蓄", goalTypes: ["numeric"], description: "收入 - 支出" },
+  { value: "finance_income", label: "累計收入", goalTypes: ["numeric"], description: "累計收入金額" },
+  { value: "finance_expense", label: "控制支出", goalTypes: ["numeric"], description: "累計支出金額" },
+  { value: "exercise_count", label: "運動次數", goalTypes: ["count"], description: "累計運動次數" },
+  { value: "exercise_minutes", label: "運動時間", goalTypes: ["count"], description: "累計運動分鐘" },
+  { value: "reading_books", label: "讀完書籍", goalTypes: ["count"], description: "累計讀完書本數" },
+  { value: "water_days", label: "飲水達標", goalTypes: ["count"], description: "飲水達標天數" },
+  { value: "sleep_days", label: "睡眠達標", goalTypes: ["count"], description: "睡眠達標天數" },
 ]
 
 const COLORS = [
@@ -161,6 +194,12 @@ function getStatusText(goal: Goal): string {
   }
 }
 
+function getTrackSourceLabel(trackSource: string | null): string {
+  if (!trackSource || trackSource === "manual") return ""
+  const option = TRACK_SOURCE_OPTIONS.find(o => o.value === trackSource)
+  return option?.label || ""
+}
+
 // ============================================
 // GoalCard 組件
 // ============================================
@@ -182,6 +221,7 @@ function GoalCard({
   const progress = calcProgress(goal)
   const isCompleted = goal.status === "completed"
   const isPaused = goal.status === "paused"
+  const trackSourceLabel = getTrackSourceLabel(goal.track_source)
 
   return (
     <div className={cn(
@@ -206,6 +246,13 @@ function GoalCard({
             <h3 className="font-semibold text-gray-800">{goal.title}</h3>
             {goal.description && (
               <p className="text-sm text-gray-500 line-clamp-1">{goal.description}</p>
+            )}
+            {/* 追蹤來源標籤 */}
+            {trackSourceLabel && (
+              <div className="flex items-center gap-1 mt-1">
+                <LinkIcon className="w-3 h-3 text-gray-400" />
+                <span className="text-xs text-gray-400">{trackSourceLabel}</span>
+              </div>
             )}
           </div>
         </div>
@@ -275,8 +322,8 @@ function GoalCard({
         </div>
       )}
 
-      {/* 更新進度按鈕 */}
-      {goal.status === "active" && goal.goal_type !== "countdown" && (
+      {/* 更新進度按鈕（只有手動更新的才顯示） */}
+      {goal.status === "active" && goal.goal_type !== "countdown" && goal.track_source === "manual" && (
         <Button 
           variant="outline" 
           size="sm" 
@@ -307,7 +354,9 @@ export default function GoalsPage() {
   const supabase = createClient()
 
   const [goals, setGoals] = useState<Goal[]>([])
+  const [habits, setHabits] = useState<Habit[]>([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [filter, setFilter] = useState<FilterType>("all")
 
@@ -334,11 +383,257 @@ export default function GoalsPage() {
     unit: "",
     direction: "increase" as "increase" | "decrease",
     showOnDashboard: true,
+    // 追蹤來源
+    trackSource: "manual" as TrackSource,
+    habitId: "",
+    targetWaterMl: "2000",
+    targetSleepHours: "7",
   })
   const [progressValue, setProgressValue] = useState("")
 
+  // ============================================
+  // 進度計算函數
+  // ============================================
+  const calcHabitStreak = useCallback(async (userId: string, habitId: string): Promise<number> => {
+    const { data: logs } = await supabase
+      .from("habit_logs")
+      .select("date")
+      .eq("user_id", userId)
+      .eq("habit_id", habitId)
+      .order("date", { ascending: false })
+      .limit(365)
+
+    if (!logs || logs.length === 0) return 0
+
+    let streak = 0
+    let currentDate = startOfDay(new Date())
+    
+    const todayStr = format(currentDate, "yyyy-MM-dd")
+    const hasToday = logs.some(l => l.date === todayStr)
+    if (!hasToday) {
+      currentDate = subDays(currentDate, 1)
+    }
+
+    for (const log of logs) {
+      const logDate = format(currentDate, "yyyy-MM-dd")
+      if (log.date === logDate) {
+        streak++
+        currentDate = subDays(currentDate, 1)
+      } else if (log.date < logDate) {
+        break
+      }
+    }
+
+    return streak
+  }, [supabase])
+
+  const calcHabitCount = useCallback(async (userId: string, habitId: string, startDate?: string): Promise<number> => {
+    let query = supabase
+      .from("habit_logs")
+      .select("id", { count: "exact" })
+      .eq("user_id", userId)
+      .eq("habit_id", habitId)
+
+    if (startDate) {
+      query = query.gte("date", startDate)
+    }
+
+    const { count } = await query
+    return count || 0
+  }, [supabase])
+
+  const getLatestWeight = useCallback(async (userId: string): Promise<number | null> => {
+    const { data } = await supabase
+      .from("health_metrics")
+      .select("value_primary")
+      .eq("user_id", userId)
+      .eq("metric_type", "weight")
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single()
+
+    return data?.value_primary || null
+  }, [supabase])
+
+  const calcFinance = useCallback(async (userId: string, type: "savings" | "income" | "expense", startDate?: string): Promise<number> => {
+    let incomeQuery = supabase.from("finance_records").select("amount").eq("user_id", userId).eq("type", "income")
+    let expenseQuery = supabase.from("finance_records").select("amount").eq("user_id", userId).eq("type", "expense")
+
+    if (startDate) {
+      incomeQuery = incomeQuery.gte("date", startDate)
+      expenseQuery = expenseQuery.gte("date", startDate)
+    }
+
+    const [incomeResult, expenseResult] = await Promise.all([incomeQuery, expenseQuery])
+
+    const totalIncome = incomeResult.data?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
+    const totalExpense = expenseResult.data?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
+
+    if (type === "income") return totalIncome
+    if (type === "expense") return totalExpense
+    return totalIncome - totalExpense
+  }, [supabase])
+
+  const calcExercise = useCallback(async (userId: string, metric: "count" | "minutes", startDate?: string): Promise<number> => {
+    if (metric === "count") {
+      let query = supabase.from("health_exercises").select("id", { count: "exact" }).eq("user_id", userId)
+      if (startDate) query = query.gte("date", startDate)
+      const { count } = await query
+      return count || 0
+    } else {
+      let query = supabase.from("health_exercises").select("duration_minutes").eq("user_id", userId)
+      if (startDate) query = query.gte("date", startDate)
+      const { data } = await query
+      return data?.reduce((sum, r) => sum + (r.duration_minutes || 0), 0) || 0
+    }
+  }, [supabase])
+
+  const calcBooksFinished = useCallback(async (userId: string, startDate?: string): Promise<number> => {
+    let query = supabase
+      .from("journals_reading")
+      .select("id", { count: "exact" })
+      .eq("user_id", userId)
+      .eq("is_finished", true)
+
+    if (startDate) query = query.gte("date", startDate)
+
+    const { count } = await query
+    return count || 0
+  }, [supabase])
+
+  const calcHealthDays = useCallback(async (userId: string, metricType: "water" | "sleep", targetValue: number, startDate?: string): Promise<number> => {
+    let query = supabase.from("health_metrics").select("date, value_primary").eq("user_id", userId).eq("metric_type", metricType)
+    if (startDate) query = query.gte("date", startDate)
+
+    const { data } = await query
+    if (!data) return 0
+
+    const dailyMax: Record<string, number> = {}
+    data.forEach(r => {
+      if (!dailyMax[r.date] || r.value_primary > dailyMax[r.date]) {
+        dailyMax[r.date] = r.value_primary
+      }
+    })
+
+    return Object.values(dailyMax).filter(v => v >= targetValue).length
+  }, [supabase])
+
+  // 計算單個目標的進度
+  const calculateProgress = useCallback(async (goal: Goal, userId: string): Promise<{ currentValue?: number | null; currentCount?: number | null }> => {
+    const config = (goal.track_config || {}) as TrackConfig
+    const startDate = config.start_date || goal.started_at || undefined
+
+    switch (goal.track_source) {
+      case "habit":
+        if (!config.habit_id) return {}
+        if (goal.goal_type === "streak") {
+          const streak = await calcHabitStreak(userId, config.habit_id)
+          return { currentCount: streak }
+        } else {
+          const count = await calcHabitCount(userId, config.habit_id, startDate)
+          return { currentCount: count }
+        }
+
+      case "weight":
+        const weight = await getLatestWeight(userId)
+        return { currentValue: weight }
+
+      case "finance_savings":
+        const savings = await calcFinance(userId, "savings", startDate)
+        return { currentValue: savings }
+
+      case "finance_income":
+        const income = await calcFinance(userId, "income", startDate)
+        return { currentValue: income }
+
+      case "finance_expense":
+        const expense = await calcFinance(userId, "expense", startDate)
+        return { currentValue: expense }
+
+      case "exercise_count":
+        const exerciseCount = await calcExercise(userId, "count", startDate)
+        return { currentCount: exerciseCount }
+
+      case "exercise_minutes":
+        const exerciseMinutes = await calcExercise(userId, "minutes", startDate)
+        return { currentCount: exerciseMinutes }
+
+      case "reading_books":
+        const booksCount = await calcBooksFinished(userId, startDate)
+        return { currentCount: booksCount }
+
+      case "water_days":
+        const waterDays = await calcHealthDays(userId, "water", config.target_value || 2000, startDate)
+        return { currentCount: waterDays }
+
+      case "sleep_days":
+        const sleepDays = await calcHealthDays(userId, "sleep", config.target_value || 7, startDate)
+        return { currentCount: sleepDays }
+
+      default:
+        return {}
+    }
+  }, [calcHabitStreak, calcHabitCount, getLatestWeight, calcFinance, calcExercise, calcBooksFinished, calcHealthDays])
+
+  // 同步所有目標進度
+  const syncGoalsProgress = useCallback(async (goalsToSync: Goal[], userId: string): Promise<Goal[]> => {
+    const updatedGoals = await Promise.all(
+      goalsToSync.map(async (goal) => {
+        if (goal.track_source === "manual" || !goal.track_source) {
+          return goal
+        }
+
+        const progress = await calculateProgress(goal, userId)
+        
+        if (progress.currentValue !== undefined || progress.currentCount !== undefined) {
+          const updateData: Record<string, number | string | null> = {}
+          
+          if (progress.currentValue !== undefined) {
+            updateData.current_value = progress.currentValue
+          }
+          if (progress.currentCount !== undefined) {
+            updateData.current_count = progress.currentCount
+          }
+
+          // 檢查是否達成
+          let isCompleted = false
+          if (goal.goal_type === "numeric" && progress.currentValue !== null && progress.currentValue !== undefined) {
+            if (goal.direction === "decrease" && progress.currentValue <= (goal.target_value || 0)) {
+              isCompleted = true
+            } else if (goal.direction === "increase" && progress.currentValue >= (goal.target_value || 0)) {
+              isCompleted = true
+            }
+          } else if ((goal.goal_type === "streak" || goal.goal_type === "count") && progress.currentCount !== null && progress.currentCount !== undefined) {
+            if (progress.currentCount >= (goal.target_count || 0)) {
+              isCompleted = true
+            }
+          }
+
+          if (isCompleted && goal.status === "active") {
+            updateData.status = "completed"
+            updateData.completed_at = new Date().toISOString()
+          }
+
+          await supabase.from("goals").update(updateData).eq("id", goal.id)
+
+          return {
+            ...goal,
+            current_value: progress.currentValue ?? goal.current_value,
+            current_count: progress.currentCount ?? goal.current_count,
+            status: isCompleted ? "completed" : goal.status,
+          } as Goal
+        }
+
+        return goal
+      })
+    )
+
+    return updatedGoals
+  }, [calculateProgress, supabase])
+
   // 載入目標
-  const fetchGoals = async () => {
+  const fetchGoals = async (shouldSync = false) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -351,19 +646,57 @@ export default function GoalsPage() {
       .order("created_at", { ascending: false })
 
     if (data) {
-      setGoals(data as Goal[])
+      let goalsData = data as Goal[]
+      
+      // 同步自動追蹤的目標進度
+      if (shouldSync) {
+        setSyncing(true)
+        goalsData = await syncGoalsProgress(goalsData, user.id)
+        setSyncing(false)
+      }
+      
+      setGoals(goalsData)
     }
     setLoading(false)
   }
 
+  // 載入習慣列表
+  const fetchHabits = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+      .from("habits")
+      .select("id, title, icon")
+      .eq("user_id", user.id)
+      .order("title")
+
+    if (data) {
+      setHabits(data as Habit[])
+    }
+  }
+
+  // 手動同步進度
+  const handleSyncProgress = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    setSyncing(true)
+    const updatedGoals = await syncGoalsProgress(goals, user.id)
+    setGoals(updatedGoals)
+    setSyncing(false)
+  }
+
   useEffect(() => {
-    fetchGoals()
+    fetchGoals(true) // 初次載入時同步
+    fetchHabits()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 開啟新增/編輯對話框
   const openDialog = (goal?: Goal) => {
     if (goal) {
+      const config = (goal.track_config || {}) as TrackConfig
       setEditingGoal(goal)
       setFormData({
         goalType: (goal.goal_type as GoalType) || "countdown",
@@ -379,6 +712,10 @@ export default function GoalsPage() {
         unit: goal.unit || "",
         direction: (goal.direction as "increase" | "decrease") || "increase",
         showOnDashboard: goal.show_on_dashboard ?? true,
+        trackSource: (goal.track_source as TrackSource) || "manual",
+        habitId: config.habit_id || "",
+        targetWaterMl: config.target_value?.toString() || "2000",
+        targetSleepHours: config.target_value?.toString() || "7",
       })
     } else {
       setEditingGoal(null)
@@ -396,9 +733,20 @@ export default function GoalsPage() {
         unit: "",
         direction: "increase",
         showOnDashboard: true,
+        trackSource: "manual",
+        habitId: "",
+        targetWaterMl: "2000",
+        targetSleepHours: "7",
       })
     }
     setDialogOpen(true)
+  }
+
+  // 取得當前目標類型可用的追蹤來源
+  const getAvailableTrackSources = () => {
+    return TRACK_SOURCE_OPTIONS.filter(option => 
+      option.goalTypes.includes(formData.goalType)
+    )
   }
 
   // 儲存目標
@@ -419,6 +767,22 @@ export default function GoalsPage() {
       color: formData.color,
       goal_type: formData.goalType,
       show_on_dashboard: formData.showOnDashboard,
+      track_source: formData.trackSource,
+    }
+
+    // 建立追蹤設定
+    const trackConfig: TrackConfig = {}
+    if (formData.trackSource === "habit" && formData.habitId) {
+      trackConfig.habit_id = formData.habitId
+    }
+    if (formData.trackSource === "water_days") {
+      trackConfig.target_value = parseInt(formData.targetWaterMl) || 2000
+    }
+    if (formData.trackSource === "sleep_days") {
+      trackConfig.target_value = parseInt(formData.targetSleepHours) || 7
+    }
+    if (Object.keys(trackConfig).length > 0) {
+      goalData.track_config = trackConfig
     }
 
     switch (formData.goalType) {
@@ -461,7 +825,7 @@ export default function GoalsPage() {
 
     setSaving(false)
     setDialogOpen(false)
-    fetchGoals()
+    fetchGoals(true) // 儲存後同步進度
   }
 
   // 更新狀態
@@ -508,10 +872,9 @@ export default function GoalsPage() {
     }
 
     await supabase.from("goals").update(updateData).eq("id", selectedGoal.id)
-    
+
     setSaving(false)
     setProgressDialogOpen(false)
-    setSelectedGoal(null)
     fetchGoals()
   }
 
@@ -524,15 +887,15 @@ export default function GoalsPage() {
     fetchGoals()
   }
 
-  // 篩選目標
-  const filteredGoals = goals.filter(g => {
-    if (filter === "all") return g.status !== "archived"
-    return g.status === filter
+  // 過濾目標
+  const filteredGoals = goals.filter(goal => {
+    if (filter === "all") return true
+    return goal.status === filter
   })
 
   // 統計
   const stats = {
-    total: goals.filter(g => g.status !== "archived").length,
+    total: goals.length,
     active: goals.filter(g => g.status === "active").length,
     completed: goals.filter(g => g.status === "completed").length,
     paused: goals.filter(g => g.status === "paused").length,
@@ -548,50 +911,63 @@ export default function GoalsPage() {
 
   return (
     <div className="space-y-6">
-      {/* 返回按鈕 */}
-      <Link href="/dashboard">
-        <Button variant="ghost" size="sm" className="gap-2">
-          <ArrowLeft className="w-4 h-4" />
-          返回總覽
-        </Button>
-      </Link>
-
-      {/* 頁面標題 */}
+      {/* 標題列 */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">🎯 目標管理</h1>
-          <p className="text-gray-600 mt-1">設定目標，追蹤進度</p>
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <Target className="w-7 h-7 text-blue-600" />
+              目標追蹤
+            </h1>
+            <p className="text-gray-600 mt-1">設定目標，追蹤進度</p>
+          </div>
         </div>
-        <Button onClick={() => openDialog()} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="w-4 h-4 mr-2" />
-          新增目標
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleSyncProgress}
+            disabled={syncing}
+          >
+            <RefreshCw className={cn("w-4 h-4 mr-2", syncing && "animate-spin")} />
+            {syncing ? "同步中..." : "同步進度"}
+          </Button>
+          <Button onClick={() => openDialog()}>
+            <Plus className="w-4 h-4 mr-2" />
+            新增目標
+          </Button>
+        </div>
       </div>
 
       {/* 統計卡片 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-gray-50 to-slate-50">
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
-            <p className="text-xs text-gray-500">全部目標</p>
+            <p className="text-3xl font-bold text-gray-600">{stats.total}</p>
+            <p className="text-sm text-gray-500">全部目標</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50">
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-blue-600">{stats.active}</p>
-            <p className="text-xs text-gray-500">進行中</p>
+            <p className="text-3xl font-bold text-blue-600">{stats.active}</p>
+            <p className="text-sm text-gray-500">進行中</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-gradient-to-br from-green-50 to-emerald-50">
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
-            <p className="text-xs text-gray-500">已完成</p>
+            <p className="text-3xl font-bold text-green-600">{stats.completed}</p>
+            <p className="text-sm text-gray-500">已完成</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-gradient-to-br from-gray-50 to-zinc-50">
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-gray-400">{stats.paused}</p>
-            <p className="text-xs text-gray-500">已暫停</p>
+            <p className="text-3xl font-bold text-gray-400">{stats.paused}</p>
+            <p className="text-sm text-gray-500">已暫停</p>
           </CardContent>
         </Card>
       </div>
@@ -605,7 +981,10 @@ export default function GoalsPage() {
             size="sm"
             onClick={() => setFilter(f)}
           >
-            {f === "all" ? "全部" : f === "active" ? "進行中" : f === "completed" ? "已完成" : "已暫停"}
+            {f === "all" && "全部"}
+            {f === "active" && "進行中"}
+            {f === "completed" && "已完成"}
+            {f === "paused" && "已暫停"}
           </Button>
         ))}
       </div>
@@ -615,7 +994,7 @@ export default function GoalsPage() {
         <div className="text-center py-12 bg-white rounded-lg border">
           <Target className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-800 mb-2">
-            {filter === "all" ? "還沒有目標" : `沒有${filter === "active" ? "進行中" : filter === "completed" ? "已完成" : "暫停"}的目標`}
+            {filter === "all" ? "還沒有設定目標" : `沒有${filter === "active" ? "進行中" : filter === "completed" ? "已完成" : "已暫停"}的目標`}
           </h3>
           {filter === "all" && (
             <Button onClick={() => openDialog()} className="mt-4">
@@ -661,7 +1040,11 @@ export default function GoalsPage() {
                       <button
                         key={type.value}
                         type="button"
-                        onClick={() => setFormData({ ...formData, goalType: type.value as GoalType })}
+                        onClick={() => setFormData({ 
+                          ...formData, 
+                          goalType: type.value as GoalType,
+                          trackSource: "manual" // 切換類型時重設追蹤來源
+                        })}
                         className={cn(
                           "p-3 rounded-lg border-2 text-left transition-all",
                           formData.goalType === type.value
@@ -676,6 +1059,88 @@ export default function GoalsPage() {
                     )
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* 資料來源選擇 */}
+            {formData.goalType !== "countdown" && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <LinkIcon className="w-4 h-4" />
+                  資料來源
+                </Label>
+                <Select
+                  value={formData.trackSource}
+                  onValueChange={(v) => setFormData({ ...formData, trackSource: v as TrackSource })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getAvailableTrackSources().map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        <div>
+                          <div>{option.label}</div>
+                          <div className="text-xs text-gray-500">{option.description}</div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* 習慣選擇（當資料來源是習慣時） */}
+            {formData.trackSource === "habit" && (
+              <div className="space-y-2">
+                <Label>選擇習慣 *</Label>
+                <Select
+                  value={formData.habitId}
+                  onValueChange={(v) => setFormData({ ...formData, habitId: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇要追蹤的習慣" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {habits.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        尚未建立任何習慣
+                      </SelectItem>
+                    ) : (
+                      habits.map((habit) => (
+                        <SelectItem key={habit.id} value={habit.id}>
+                          {habit.icon || "🎯"} {habit.title}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* 飲水達標設定 */}
+            {formData.trackSource === "water_days" && (
+              <div className="space-y-2">
+                <Label>每日飲水目標 (ml)</Label>
+                <Input
+                  type="number"
+                  value={formData.targetWaterMl}
+                  onChange={(e) => setFormData({ ...formData, targetWaterMl: e.target.value })}
+                  placeholder="2000"
+                />
+              </div>
+            )}
+
+            {/* 睡眠達標設定 */}
+            {formData.trackSource === "sleep_days" && (
+              <div className="space-y-2">
+                <Label>每日睡眠目標 (小時)</Label>
+                <Input
+                  type="number"
+                  value={formData.targetSleepHours}
+                  onChange={(e) => setFormData({ ...formData, targetSleepHours: e.target.value })}
+                  placeholder="7"
+                />
               </div>
             )}
 
