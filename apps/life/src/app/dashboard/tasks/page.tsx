@@ -70,7 +70,7 @@ type Task = {
   recurrence_type: string | null
   recurrence_interval: number | null
   recurrence_end_date: string | null
-  parent_task_id: string | null
+  original_task_id: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -418,7 +418,7 @@ export default function TasksPage() {
         recurrence_type: task.recurrence_type,
         recurrence_interval: task.recurrence_interval,
         recurrence_end_date: task.recurrence_end_date,
-        parent_task_id: task.parent_task_id || task.id,
+        original_task_id: task.original_task_id || task.id,
       } as Record<string, unknown>)
   }
 

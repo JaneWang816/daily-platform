@@ -22,14 +22,17 @@ Font.register({
   src: "/fonts/NotoSansSC-Regular.ttf",
 })
 
-// 中文換行處理 - 不使用連字符
-Font.registerHyphenationCallback((word) => [word])
+// 禁用連字符 - 返回字元陣列允許任意位置換行但不加連字符
+Font.registerHyphenationCallback((word) => {
+  // 將單詞拆成單個字元，這樣可以在任意位置換行
+  // 且不會自動添加連字符
+  return Array.from(word)
+})
 
-// 在中文字元間插入零寬空格，允許換行但不顯示連字符
+// 處理文字（保留函數以維持相容性）
 function processTextForWrapping(text: string): string {
   if (!text) return ''
-  // 在中文字元後插入零寬空格 \u200B
-  return text.replace(/([\u4e00-\u9fff])/g, '$1\u200B')
+  return text
 }
 
 // PDF 樣式
