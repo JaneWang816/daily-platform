@@ -38,6 +38,14 @@ type Budget = {
 }
 
 // ============================================
+// Supabase Client
+// ============================================
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
+
+// ============================================
 // 工具函數
 // ============================================
 const getPrevMonth = (yearMonth: string) => {

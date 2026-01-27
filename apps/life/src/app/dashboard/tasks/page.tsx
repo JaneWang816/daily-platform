@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { createClient } from "@daily/database/client"
+import { createBrowserClient } from '@supabase/ssr'
 import { 
   Button, 
   Input, 
@@ -170,6 +170,16 @@ function getRecurrenceLabel(type: string | null, interval?: number | null): stri
     return `每 ${interval} 天`
   }
   return option?.label || ""
+}
+
+// ============================================
+// Supabase Client
+// ============================================
+function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 }
 
 // ============================================
