@@ -30,6 +30,7 @@ export type JournalGratitude = Tables<'journals_gratitude'>
 export type FinanceRecord = Tables<'finance_records'>
 export type HealthExercise = Tables<'health_exercises'>
 export type HealthMetric = Tables<'health_metrics'>
+export type Meal = Tables<'meals'>
 export type Deck = Tables<'decks'>
 export type Flashcard = Tables<'flashcards'>
 export type Subject = Tables<'subjects'>
@@ -39,6 +40,7 @@ export type Question = Tables<'questions'>
 export type QuestionType = Tables<'question_types'>
 export type QuestionTopic = Tables<'question_topics'>
 export type DailyStudySummary = Tables<'daily_study_summary'>
+export type FoodNutrition = Tables<'food_nutrition'>
 
 // 學習歷程相關
 export type LearningPortfolio = Tables<'learning_portfolios'>
@@ -198,6 +200,8 @@ export type JournalGratitudeInsert = TablesInsert<'journals_gratitude'>
 export type FinanceRecordInsert = TablesInsert<'finance_records'>
 export type HealthExerciseInsert = TablesInsert<'health_exercises'>
 export type HealthMetricInsert = TablesInsert<'health_metrics'>
+export type MealInsert = TablesInsert<'meals'>
+export type FoodNutritionInsert = TablesInsert<'food_nutrition'>
 export type FlashcardInsert = TablesInsert<'flashcards'>
 export type DeckInsert = TablesInsert<'decks'>
 export type JournalTravelInsert = Omit<JournalTravel, 'id' | 'created_at' | 'updated_at'>
@@ -227,6 +231,8 @@ export type JournalGratitudeUpdate = TablesUpdate<'journals_gratitude'>
 export type FinanceRecordUpdate = TablesUpdate<'finance_records'>
 export type HealthExerciseUpdate = TablesUpdate<'health_exercises'>
 export type HealthMetricUpdate = TablesUpdate<'health_metrics'>
+export type MealUpdate = TablesUpdate<'meals'>
+export type FoodNutritionUpdate = TablesUpdate<'food_nutrition'>
 export type FlashcardUpdate = TablesUpdate<'flashcards'>
 export type DeckUpdate = TablesUpdate<'decks'>
 export type JournalTravelUpdate = Partial<Omit<JournalTravel, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
@@ -426,6 +432,48 @@ export const EXERCISE_TYPES = [
 ] as const
 
 export type ExerciseType = typeof EXERCISE_TYPES[number]
+
+// ============================================
+// 餐點類型
+// ============================================
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+
+export const MEAL_TYPES = [
+  { value: 'breakfast', label: '🌅 早餐', color: 'bg-amber-100', textColor: 'text-amber-700' },
+  { value: 'lunch', label: '☀️ 午餐', color: 'bg-orange-100', textColor: 'text-orange-700' },
+  { value: 'dinner', label: '🌙 晚餐', color: 'bg-indigo-100', textColor: 'text-indigo-700' },
+  { value: 'snack', label: '🍪 點心', color: 'bg-pink-100', textColor: 'text-pink-700' },
+] as const
+
+export const MEAL_TYPE_MAP: Record<MealType, { label: string; color: string; textColor: string }> = {
+  breakfast: { label: '🌅 早餐', color: 'bg-amber-100', textColor: 'text-amber-700' },
+  lunch: { label: '☀️ 午餐', color: 'bg-orange-100', textColor: 'text-orange-700' },
+  dinner: { label: '🌙 晚餐', color: 'bg-indigo-100', textColor: 'text-indigo-700' },
+  snack: { label: '🍪 點心', color: 'bg-pink-100', textColor: 'text-pink-700' },
+}
+
+// ============================================
+// 食物分類
+// ============================================
+export type FoodCategory = 'staple' | 'protein' | 'vegetable' | 'fruit' | 'drink' | 'snack'
+
+export const FOOD_CATEGORIES = [
+  { value: 'staple', label: '🍚 主食', color: 'bg-amber-100', textColor: 'text-amber-700' },
+  { value: 'protein', label: '🥚 蛋白質', color: 'bg-red-100', textColor: 'text-red-700' },
+  { value: 'vegetable', label: '🥗 蔬菜', color: 'bg-green-100', textColor: 'text-green-700' },
+  { value: 'fruit', label: '🍎 水果', color: 'bg-pink-100', textColor: 'text-pink-700' },
+  { value: 'drink', label: '🧋 飲料', color: 'bg-cyan-100', textColor: 'text-cyan-700' },
+  { value: 'snack', label: '🍿 點心', color: 'bg-purple-100', textColor: 'text-purple-700' },
+] as const
+
+export const FOOD_CATEGORY_MAP: Record<FoodCategory, { label: string; color: string; textColor: string }> = {
+  staple: { label: '🍚 主食', color: 'bg-amber-100', textColor: 'text-amber-700' },
+  protein: { label: '🥚 蛋白質', color: 'bg-red-100', textColor: 'text-red-700' },
+  vegetable: { label: '🥗 蔬菜', color: 'bg-green-100', textColor: 'text-green-700' },
+  fruit: { label: '🍎 水果', color: 'bg-pink-100', textColor: 'text-pink-700' },
+  drink: { label: '🧋 飲料', color: 'bg-cyan-100', textColor: 'text-cyan-700' },
+  snack: { label: '🍿 點心', color: 'bg-purple-100', textColor: 'text-purple-700' },
+}
 
 // ============================================
 // 天氣選項（遊覽日誌用）

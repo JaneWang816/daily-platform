@@ -370,6 +370,59 @@ export type Database = {
           },
         ]
       }
+      food_nutrition: {
+        Row: {
+          calories: number
+          carbs: number | null
+          category: string
+          created_at: string | null
+          fat: number | null
+          id: string
+          is_favorite: boolean | null
+          name: string
+          portion: string
+          protein: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          calories: number
+          carbs?: number | null
+          category: string
+          created_at?: string | null
+          fat?: number | null
+          id?: string
+          is_favorite?: boolean | null
+          name: string
+          portion: string
+          protein?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          calories?: number
+          carbs?: number | null
+          category?: string
+          created_at?: string | null
+          fat?: number | null
+          id?: string
+          is_favorite?: boolean | null
+          name?: string
+          portion?: string
+          protein?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_nutrition_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_logs: {
         Row: {
           created_at: string | null
@@ -1060,6 +1113,56 @@ export type Database = {
             columns: ["topic_id"]
             isOneToOne: false
             referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meals: {
+        Row: {
+          calories: number | null
+          created_at: string | null
+          date: string
+          description: string
+          id: string
+          meal_type: string
+          note: string | null
+          photo_url: string | null
+          protein: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          calories?: number | null
+          created_at?: string | null
+          date?: string
+          description: string
+          id?: string
+          meal_type: string
+          note?: string | null
+          photo_url?: string | null
+          protein?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          calories?: number | null
+          created_at?: string | null
+          date?: string
+          description?: string
+          id?: string
+          meal_type?: string
+          note?: string | null
+          photo_url?: string | null
+          protein?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

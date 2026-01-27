@@ -22,14 +22,19 @@ Font.register({
   src: "/fonts/NotoSansSC-Regular.ttf",
 })
 
-// 禁用連字符 - 返回字元陣列允許任意位置換行但不加連字符
+// 自訂斷詞邏輯：讓每個字元可以斷開，但不加連字符
+// 返回格式：['字', '', '元', ''] - 空字串表示可以在此斷開但不加連字符
 Font.registerHyphenationCallback((word) => {
-  // 將單詞拆成單個字元，這樣可以在任意位置換行
-  // 且不會自動添加連字符
-  return Array.from(word)
+  // 把每個字元後面加上空字串，表示這裡可以換行但不要加連字符
+  const result: string[] = []
+  for (const char of word) {
+    result.push(char)
+    result.push('') // 空字串 = 可斷點但無連字符
+  }
+  return result
 })
 
-// 處理文字（保留函數以維持相容性）
+// 文字處理（不再需要插入零寬空格）
 function processTextForWrapping(text: string): string {
   if (!text) return ''
   return text

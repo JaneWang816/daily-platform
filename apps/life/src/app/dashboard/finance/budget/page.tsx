@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from "@daily/database/client"
 import { 
   Button, Input, Card, CardContent, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter, Label, Select, SelectContent, SelectItem,
@@ -35,16 +35,6 @@ type Budget = {
   year_month: string
   category_id: string | null
   amount: number
-}
-
-// ============================================
-// Supabase Client
-// ============================================
-function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
 }
 
 // ============================================

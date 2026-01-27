@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from "@daily/database/client"
 import { Button, Card, CardContent } from "@daily/ui"
 import { cn } from "@daily/utils"
 import { format, subMonths } from "date-fns"
@@ -47,16 +47,6 @@ type Budget = {
 // ============================================
 const EXPENSE_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899"]
 const INCOME_COLORS = ["#22c55e", "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9"]
-
-// ============================================
-// Supabase Client
-// ============================================
-function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
 
 // ============================================
 // 主元件

@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from "@daily/database/client"
 import { 
   Button, Input, Card, CardContent, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter, Label, Select, SelectContent, SelectItem,
@@ -78,16 +78,6 @@ const TIME_OPTIONS = (() => {
 
 const getPlanColor = (color: string) => PLAN_COLORS.find(c => c.value === color) || PLAN_COLORS[0]
 const formatTime = (time: string | null) => time ? time.substring(0, 5) : ""
-
-// ============================================
-// Supabase Client
-// ============================================
-function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
 
 // ============================================
 // 主元件

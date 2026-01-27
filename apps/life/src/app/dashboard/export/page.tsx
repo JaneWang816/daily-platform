@@ -3,7 +3,7 @@
 
 import { useState } from "react"
 import { format } from "date-fns"
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from "@daily/database/client"
 import { Button, Input, Label } from "@daily/ui"
 import {
   Download, FileSpreadsheet, Calendar, CheckSquare, Target, FileText,
@@ -139,16 +139,6 @@ const COLUMN_NAMES: Record<string, Record<string, string>> = {
     value_secondary: "數值 2",
     note: "備註",
   },
-}
-
-// ============================================
-// Supabase Client
-// ============================================
-function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
 }
 
 // ============================================

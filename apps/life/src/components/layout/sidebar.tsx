@@ -27,6 +27,7 @@ import {
   Target,
   LogOut,
   GraduationCap,
+  Scale,
 } from "lucide-react"
 
 type ModuleType = 'journal' | 'habits' | 'tasks' | 'schedule' | 'health' | 'finance' | 'study'
@@ -66,6 +67,7 @@ const navItems: NavItem[] = [
     module: "health",
     children: [
       { title: "運動與數據", href: "/dashboard/health", icon: Dumbbell },
+      { title: "體重管理", href: "/dashboard/health/weight", icon: Scale },
       { title: "健康統計", href: "/dashboard/health/stats", icon: BarChart2 },
     ],
   },

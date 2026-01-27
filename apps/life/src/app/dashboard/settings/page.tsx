@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from "@daily/database/client"
 import { 
   Button, Input, Card, CardContent, CardHeader, CardTitle, CardDescription,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, 
@@ -97,16 +97,6 @@ const MODULE_CONFIG: {
 // 生成年份選項 (最近 100 年)
 const currentYear = new Date().getFullYear()
 const yearOptions = Array.from({ length: 100 }, (_, i) => currentYear - i)
-
-// ============================================
-// Supabase Client
-// ============================================
-function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
 
 // ============================================
 // 主元件

@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from "@daily/database/client"
 import { 
   Button, Input, Card, CardContent, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter, Label, Textarea, Select, SelectContent, SelectItem,
@@ -66,15 +66,6 @@ const METRIC_TYPES = [
   { value: "steps", label: "步數", icon: Footprints, unit: "步" },
 ]
 
-// ============================================
-// Supabase Client
-// ============================================
-function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
 
 // ============================================
 // 主元件
@@ -313,12 +304,20 @@ export default function HealthPage() {
           <h1 className="text-2xl font-bold text-gray-800">💪 健康記錄</h1>
           <p className="text-gray-600 mt-1">追蹤運動與健康數據</p>
         </div>
-        <Link href="/dashboard/health/stats">
-          <Button variant="outline" className="gap-2">
-            <BarChart2 className="w-4 h-4" />
-            健康統計
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/health/weight">
+            <Button variant="outline" className="gap-2">
+              <Scale className="w-4 h-4" />
+              體重管理
+            </Button>
+          </Link>
+          <Link href="/dashboard/health/stats">
+            <Button variant="outline" className="gap-2">
+              <BarChart2 className="w-4 h-4" />
+              健康統計
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* 本週統計 */}
