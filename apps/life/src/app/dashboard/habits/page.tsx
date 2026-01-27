@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { createClient } from "@daily/database/client"
+import { createBrowserClient } from '@supabase/ssr'
 import { Button, Input, Dialog, DialogContent, DialogHeader, DialogTitle, Label } from "@daily/ui"
 import { cn } from "@daily/utils"
 import { format, startOfWeek, endOfWeek, subDays } from "date-fns"
@@ -76,6 +76,16 @@ const DAY_OPTIONS = [
   { value: 6, label: "六" },
   { value: 7, label: "日" },
 ]
+
+// ============================================
+// Supabase Client
+// ============================================
+function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
 
 // ============================================
 // 主元件

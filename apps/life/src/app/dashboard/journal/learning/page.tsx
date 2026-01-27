@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { createClient } from "@daily/database/client"
+import { createBrowserClient } from '@supabase/ssr'
 import { 
   Button, Input, Card, CardContent, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, Label, Textarea, AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -33,6 +33,16 @@ const DIFFICULTY_OPTIONS = [
   { value: 4, label: "困難", color: "text-orange-600" },
   { value: 5, label: "很難", color: "text-red-600" },
 ]
+
+// ============================================
+// Supabase Client
+// ============================================
+function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
 
 export default function JournalLearningPage() {
   const supabase = createClient()

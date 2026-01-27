@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { createClient } from "@daily/database/client"
+import { createBrowserClient } from '@supabase/ssr'
 import { 
   Button, Input, Card, CardContent, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, Label, Textarea, Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -42,6 +42,16 @@ const MOOD_CONFIG: Record<number, { label: string; emoji: string }> = {
 
 const WEATHER_OPTIONS = ["☀️ 晴天", "⛅ 多雲", "☁️ 陰天", "🌧️ 雨天", "⛈️ 雷雨", "🌨️ 雪天", "🌫️ 霧"]
 const COMPANION_OPTIONS = ["👤 獨自", "👨‍👩‍👧 家人", "👫 朋友", "💑 情侶", "👥 同學", "🏢 同事", "🎒 團體"]
+
+// ============================================
+// Supabase Client
+// ============================================
+function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
 
 export default function JournalTravelPage() {
   const supabase = createClient()
