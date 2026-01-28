@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { createClient } from "@daily/database/client"
+import { createBrowserClient } from '@supabase/ssr'
 import { Button, Card, CardContent, Input } from "@daily/ui"
 import { cn } from "@daily/utils"
 import {
@@ -48,6 +48,16 @@ type FoodNutrition = {
   is_favorite: boolean | null
   created_at: string | null
   updated_at: string | null
+}
+
+// ============================================
+// Supabase Client
+// ============================================
+function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 }
 
 // ============================================

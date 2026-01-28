@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { createClient } from "@daily/database/client"
+import { createBrowserClient } from '@supabase/ssr'
 import { Button, Card, CardContent } from "@daily/ui"
 import { cn } from "@daily/utils"
 import { format, subDays } from "date-fns"
@@ -51,6 +51,16 @@ const COLORS = {
   sleep: "#8b5cf6",
   steps: "#22c55e",
   water: "#06b6d4",
+}
+
+// ============================================
+// Supabase Client
+// ============================================
+function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 }
 
 // ============================================

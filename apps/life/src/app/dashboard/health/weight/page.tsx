@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { createClient } from "@daily/database/client"
+import { createBrowserClient } from '@supabase/ssr'
 import { Button, Card, CardContent } from "@daily/ui"
 import { cn } from "@daily/utils"
 import {
@@ -90,6 +90,16 @@ const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
   { value: "month", label: "月" },
   { value: "year", label: "年" },
 ]
+
+// ============================================
+// Supabase Client
+// ============================================
+function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
 
 // ============================================
 // 主元件
