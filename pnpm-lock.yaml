@@ -237,10 +237,10 @@ importers:
   packages/database:
     dependencies:
       '@supabase/ssr':
-        specifier: ^0.5.2
-        version: 0.5.2(@supabase/supabase-js@2.90.1)
+        specifier: ^0.8.0
+        version: 0.8.0(@supabase/supabase-js@2.90.1)
       '@supabase/supabase-js':
-        specifier: ^2.49.1
+        specifier: ^2.90.1
         version: 2.90.1
     devDependencies:
       '@daily/typescript-config':

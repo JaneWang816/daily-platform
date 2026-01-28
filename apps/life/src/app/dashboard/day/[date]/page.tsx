@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { format, parseISO, getDay, addDays } from "date-fns"
 import { zhTW } from "date-fns/locale"
-import { createClient } from "@daily/database"
+import { createBrowserClient } from '@supabase/ssr'
 import { Button } from "@daily/ui"
 import { cn } from "@daily/utils"
 import {
@@ -232,6 +232,15 @@ const METRIC_TYPE_LABELS: Record<string, string> = {
   sleep: "睡眠 (小時)",
   water: "飲水 (ml)",
   steps: "步數",
+}
+// ============================================
+// Supabase Client
+// ============================================
+function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 }
 
 // ============================================
