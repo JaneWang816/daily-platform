@@ -464,7 +464,6 @@ export default function NewPortfolioPage() {
 
       const { data: portfolio, error: portfolioError } = await supabase
         .from("learning_portfolios")
-        // @ts-expect-error - Supabase SSR 類型推斷問題，資料已由 TablesInsert 驗證
         .insert(portfolioData)
         .select()
         .single() as { data: { id: string } | null; error: Error | null }
@@ -484,7 +483,6 @@ export default function NewPortfolioPage() {
 
         const { error: unitsError } = await supabase
           .from("learning_portfolio_units")
-          // @ts-expect-error - Supabase SSR 類型推斷問題，資料已由 TablesInsert 驗證
           .insert(unitInserts)
 
         if (unitsError) {
@@ -504,7 +502,6 @@ export default function NewPortfolioPage() {
 
         const { error: linksError } = await supabase
           .from("learning_portfolio_links")
-          // @ts-expect-error - Supabase SSR 類型推斷問題，資料已由 TablesInsert 驗證
           .insert(linkInserts)
 
         if (linksError) {
