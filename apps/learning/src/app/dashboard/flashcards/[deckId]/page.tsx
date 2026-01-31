@@ -35,6 +35,7 @@ import {
   Trash2,
   Play,
   Upload,
+  Download,
   Volume2,
   Clock,
   CheckCircle,
@@ -249,6 +250,41 @@ export default function DeckDetailPage() {
     fetchCards()
   }
 
+  const handleExport = () => {
+    if (cards.length === 0) {
+      alert("沒有字卡可匯出")
+      return
+    }
+
+    // CSV 標題列
+    const headers = ["front", "back", "note"]
+    
+    // 轉換資料，處理逗號和換行
+    const csvContent = [
+      headers.join(","),
+      ...cards.map(card => {
+        const front = `"${(card.front || "").replace(/"/g, '""')}"`
+        const back = `"${(card.back || "").replace(/"/g, '""')}"`
+        const note = `"${(card.note || "").replace(/"/g, '""')}"`
+        return [front, back, note].join(",")
+      })
+    ].join("\n")
+
+    // 加入 BOM 讓 Excel 正確識別 UTF-8
+    const bom = "\uFEFF"
+    const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8" })
+    
+    // 下載
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `${deck?.title || "flashcards"}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -296,6 +332,10 @@ export default function DeckDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleExport}>
+              <Download className="w-4 h-4 mr-2" />
+              匯出
+            </Button>
             <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
               <Upload className="w-4 h-4 mr-2" />
               匯入
