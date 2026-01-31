@@ -39,6 +39,7 @@ import {
   Clock,
   CheckCircle,
   RotateCcw,
+  ClipboardList,
 } from "lucide-react"
 import { FlashcardImport } from "@/components/flashcards"
 import { speak } from "@/lib/speech"
@@ -307,8 +308,8 @@ export default function DeckDetailPage() {
         </div>
       </div>
 
-      {/* 統計卡片 + 操作按鈕 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* 統計卡片 */}
+      <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-gray-800">{cards.length}</p>
@@ -327,27 +328,26 @@ export default function DeckDetailPage() {
             <p className="text-sm text-gray-500">已熟練</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-center gap-4">
-              {dueCards.length > 0 ? (
-                <Link href={`/dashboard/flashcards/${deckId}/review`}>
-                  <Button variant="secondary" size="sm">
-                    <Play className="w-4 h-4 mr-1" />
-                    開始複習
-                  </Button>
-                </Link>
-              ) : (
-                <Link href={`/dashboard/flashcards/${deckId}/quiz`}>
-                  <Button variant="secondary" size="sm">
-                    <Play className="w-4 h-4 mr-1" />
-                    測驗模式
-                  </Button>
-                </Link>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      </div>
+
+      {/* 操作按鈕 */}
+      <div className="flex items-center justify-center gap-3">
+        {dueCards.length > 0 && (
+          <Link href={`/dashboard/flashcards/${deckId}/review`}>
+            <Button className="bg-indigo-600 hover:bg-indigo-700">
+              <Play className="w-4 h-4 mr-2" />
+              開始複習
+            </Button>
+          </Link>
+        )}
+        {cards.length >= 4 && (
+          <Link href={`/dashboard/flashcards/${deckId}/quiz`}>
+            <Button variant="outline">
+              <ClipboardList className="w-4 h-4 mr-2" />
+              測驗模式
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* 字卡列表 */}
