@@ -81,6 +81,9 @@ type Goal = {
   // 追蹤來源
   track_source: string | null
   track_config: TrackConfig | null
+  // 週期性目標
+  period_type: string | null  // 'once' | 'monthly' | 'yearly'
+  period_target: number | null
 }
 
 type Habit = {
@@ -99,6 +102,7 @@ type TrackConfig = {
 type GoalType = "countdown" | "numeric" | "streak" | "count"
 type FilterType = "all" | "active" | "completed" | "paused"
 type TrackSource = "manual" | "habit" | "weight" | "finance_savings" | "finance_income" | "finance_expense" | "exercise_count" | "exercise_minutes" | "reading_books" | "water_days" | "sleep_days"
+type PeriodType = "once" | "monthly" | "yearly"
 
 // ============================================
 // 常數
@@ -168,8 +172,12 @@ function calcProgress(goal: Goal): number {
       return Math.min(100, Math.max(0, ((current - start) / (target - start)) * 100))
     case "streak":
     case "count":
-      if (!goal.target_count) return 0
-      return Math.min(100, ((goal.current_count ?? 0) / goal.target_count) * 100)
+      // 週期性目標使用 period_target
+      const targetCount = (goal.period_type === "monthly" || goal.period_type === "yearly")
+        ? (goal.period_target ?? goal.target_count ?? 0)
+        : (goal.target_count ?? 0)
+      if (!targetCount) return 0
+      return Math.min(100, ((goal.current_count ?? 0) / targetCount) * 100)
     default:
       return 0
   }
@@ -188,6 +196,12 @@ function getStatusText(goal: Goal): string {
     case "streak":
       return `連續 ${goal.current_count ?? 0} 天`
     case "count":
+      // 週期性目標
+      if (goal.period_type === "monthly") {
+        return `本月 ${goal.current_count ?? 0} / ${goal.period_target ?? 0} ${goal.unit || "次"}`
+      } else if (goal.period_type === "yearly") {
+        return `本年 ${goal.current_count ?? 0} / ${goal.period_target ?? 0} ${goal.unit || "次"}`
+      }
       return `${goal.current_count ?? 0} / ${goal.target_count ?? 0} ${goal.unit || "次"}`
     default:
       return ""
@@ -388,6 +402,9 @@ export default function GoalsPage() {
     habitId: "",
     targetWaterMl: "2000",
     targetSleepHours: "7",
+    // 週期性目標
+    periodType: "once" as "once" | "monthly" | "yearly",
+    periodTarget: "",
   })
   const [progressValue, setProgressValue] = useState("")
 
@@ -596,17 +613,19 @@ export default function GoalsPage() {
             updateData.current_count = progress.currentCount
           }
 
-          // 檢查是否達成
+          // 檢查是否達成（週期性目標不自動完成）
           let isCompleted = false
-          if (goal.goal_type === "numeric" && progress.currentValue !== null && progress.currentValue !== undefined) {
-            if (goal.direction === "decrease" && progress.currentValue <= (goal.target_value || 0)) {
-              isCompleted = true
-            } else if (goal.direction === "increase" && progress.currentValue >= (goal.target_value || 0)) {
-              isCompleted = true
-            }
-          } else if ((goal.goal_type === "streak" || goal.goal_type === "count") && progress.currentCount !== null && progress.currentCount !== undefined) {
-            if (progress.currentCount >= (goal.target_count || 0)) {
-              isCompleted = true
+          if (goal.period_type === "once" || !goal.period_type) {
+            if (goal.goal_type === "numeric" && progress.currentValue !== null && progress.currentValue !== undefined) {
+              if (goal.direction === "decrease" && progress.currentValue <= (goal.target_value || 0)) {
+                isCompleted = true
+              } else if (goal.direction === "increase" && progress.currentValue >= (goal.target_value || 0)) {
+                isCompleted = true
+              }
+            } else if ((goal.goal_type === "streak" || goal.goal_type === "count") && progress.currentCount !== null && progress.currentCount !== undefined) {
+              if (progress.currentCount >= (goal.target_count || 0)) {
+                isCompleted = true
+              }
             }
           }
 
@@ -716,6 +735,8 @@ export default function GoalsPage() {
         habitId: config.habit_id || "",
         targetWaterMl: config.target_value?.toString() || "2000",
         targetSleepHours: config.target_value?.toString() || "7",
+        periodType: (goal.period_type as PeriodType) || "once",
+        periodTarget: goal.period_target?.toString() || "",
       })
     } else {
       setEditingGoal(null)
@@ -737,6 +758,8 @@ export default function GoalsPage() {
         habitId: "",
         targetWaterMl: "2000",
         targetSleepHours: "7",
+        periodType: "once",
+        periodTarget: "",
       })
     }
     setDialogOpen(true)
@@ -801,10 +824,18 @@ export default function GoalsPage() {
         goalData.current_count = editingGoal?.current_count ?? 0
         break
       case "count":
+      // 週期性目標
+      goalData.period_type = formData.periodType
+      if (formData.periodType !== "once") {
+        goalData.period_target = formData.periodTarget ? parseInt(formData.periodTarget) : null
+        goalData.target_count = null // 週期性目標不用 target_count
+      } else {
         goalData.target_count = formData.targetCount ? parseInt(formData.targetCount) : null
-        goalData.current_count = editingGoal?.current_count ?? 0
-        goalData.unit = formData.unit || "次"
-        break
+        goalData.period_target = null
+      }
+      goalData.current_count = editingGoal?.current_count ?? 0
+      goalData.unit = formData.unit || "次"
+      break
     }
 
     if (editingGoal) {
@@ -1275,13 +1306,51 @@ export default function GoalsPage() {
             {/* 連續/累計型 */}
             {(formData.goalType === "streak" || formData.goalType === "count") && (
               <>
+                {/* 週期選項（僅 count 類型） */}
+                {formData.goalType === "count" && (
+                  <div className="space-y-2">
+                    <Label>週期類型</Label>
+                    <Select
+                      value={formData.periodType}
+                      onValueChange={(v) => setFormData({ ...formData, periodType: v as "once" | "monthly" | "yearly" })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="once">一次性（不重置）</SelectItem>
+                        <SelectItem value="monthly">每月重新計算</SelectItem>
+                        <SelectItem value="yearly">每年重新計算</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500">
+                      {formData.periodType === "monthly" && "每月 1 日自動從 0 開始計算"}
+                      {formData.periodType === "yearly" && "每年 1 月 1 日自動從 0 開始計算"}
+                    </p>
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  <Label>{formData.goalType === "streak" ? "目標天數" : "目標次數"} *</Label>
+                  <Label>
+                    {formData.goalType === "streak" 
+                      ? "目標天數" 
+                      : formData.periodType === "monthly" 
+                        ? "每月目標" 
+                        : formData.periodType === "yearly"
+                          ? "每年目標"
+                          : "目標次數"} *
+                  </Label>
                   <Input
                     type="number"
-                    value={formData.targetCount}
-                    onChange={(e) => setFormData({ ...formData, targetCount: e.target.value })}
-                    placeholder={formData.goalType === "streak" ? "例如：30" : "例如：100"}
+                    value={formData.periodType !== "once" ? formData.periodTarget : formData.targetCount}
+                    onChange={(e) => {
+                      if (formData.periodType !== "once") {
+                        setFormData({ ...formData, periodTarget: e.target.value })
+                      } else {
+                        setFormData({ ...formData, targetCount: e.target.value })
+                      }
+                    }}
+                    placeholder={formData.goalType === "streak" ? "例如：30" : "例如：5"}
                   />
                 </div>
                 {formData.goalType === "count" && (
