@@ -140,12 +140,12 @@ computer,電腦,,
       const note2 = values[3]?.trim() || ""
 
       if (!front) {
-        cards.push({ front, back, note, valid: false, error: "正面不能為空" })
+        cards.push({ front, back, note, note2, valid: false, error: "正面不能為空" })
         continue
       }
 
       if (!back) {
-        cards.push({ front, back, note, valid: false, error: "背面不能為空" })
+        cards.push({ front, back, note, note2, valid: false, error: "背面不能為空" })
         continue
       }
 
