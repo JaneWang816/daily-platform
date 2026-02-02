@@ -57,8 +57,11 @@ interface Deck {
 const LANGUAGES = [
   { value: "zh-TW", label: "中文" },
   { value: "en-US", label: "英文" },
+  { value: "es-ES", label: "西班牙語" },
   { value: "ja-JP", label: "日文" },
   { value: "ko-KR", label: "韓文" },
+  { value: "fr-FR", label: "法文" },
+  { value: "de-DE", label: "德文" },
   { value: "none", label: "無語音" },
 ]
 
