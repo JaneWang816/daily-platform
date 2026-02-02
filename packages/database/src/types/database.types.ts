@@ -311,6 +311,7 @@ export type Database = {
           interval: number | null
           next_review_at: string | null
           note: string | null
+          note2: string | null
           repetition_count: number | null
           unit_id: string | null
           updated_at: string | null
@@ -326,6 +327,7 @@ export type Database = {
           interval?: number | null
           next_review_at?: string | null
           note?: string | null
+          note2?: string | null
           repetition_count?: number | null
           unit_id?: string | null
           updated_at?: string | null
@@ -341,6 +343,7 @@ export type Database = {
           interval?: number | null
           next_review_at?: string | null
           note?: string | null
+          note2?: string | null
           repetition_count?: number | null
           unit_id?: string | null
           updated_at?: string | null

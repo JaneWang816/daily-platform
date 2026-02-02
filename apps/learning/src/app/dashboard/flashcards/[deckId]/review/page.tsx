@@ -32,6 +32,7 @@ interface Flashcard {
   front: string
   back: string
   note: string | null
+  note2: string | null
   ease_factor: number | null
   interval: number | null
   repetition_count: number | null
@@ -362,7 +363,7 @@ export default function ReviewPage() {
               {isFlipped ? currentCard.back : currentCard.front}
             </p>
 
-            {/* 備註 (只在背面且有備註時顯示) */}
+            {/* 備註1（日文例句）- 只在背面且有備註時顯示 */}
             {isFlipped && currentCard.note && (
               <div className="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200 max-w-md">
                 <div className="flex items-start gap-2">
@@ -383,6 +384,26 @@ export default function ReviewPage() {
               </div>
             )}
 
+            {/* 備註2（中文翻譯）- 只在背面且有備註時顯示 */}
+            {isFlipped && currentCard.note2 && (
+              <div className="mt-2 p-4 bg-blue-50 rounded-lg border border-blue-200 max-w-md">
+                <div className="flex items-start gap-2">
+                  <Lightbulb className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap flex-1">{currentCard.note2}</p>
+                  {deck?.front_lang && deck.front_lang !== "none" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleSpeak(currentCard.note2!, deck.front_lang)
+                      }}
+                      className="p-1 rounded-full hover:bg-blue-100 text-blue-600 flex-shrink-0"
+                    >
+                      <Volume2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             {/* 語音按鈕 */}
             <button
               onClick={(e) => {

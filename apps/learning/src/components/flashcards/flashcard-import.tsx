@@ -25,6 +25,7 @@ interface ParsedCard {
   front: string
   back: string
   note: string
+  note2: string
   valid: boolean
   error?: string
 }
@@ -64,12 +65,12 @@ export function FlashcardImport({
 
   // 下載範本
   const downloadTemplate = () => {
-    const template = `正面,背面,備註
-apple,蘋果,水果的一種
-book,書本,I love reading books.
-computer,電腦,
-"Hello, how are you?",你好，你好嗎？,常用問候語
-光合作用的產物是什麼？,葡萄糖和氧氣,6CO2 + 6H2O → C6H12O6 + 6O2`
+    const template = `正面,背面,備註,備註2
+apple,蘋果,水果的一種,可食用
+book,書本,I love reading books.,我喜歡讀書
+computer,電腦,,
+"Hello, how are you?",你好，你好嗎？,常用問候語,
+光合作用的產物是什麼？,葡萄糖和氧氣,6CO2 + 6H2O → C6H12O6 + 6O2,`
 
     const blob = new Blob(["\uFEFF" + template], { type: "text/csv;charset=utf-8" })
     const url = URL.createObjectURL(blob)
@@ -135,6 +136,7 @@ computer,電腦,
       const front = values[0].trim()
       const back = values[1].trim()
       const note = values[2]?.trim() || ""
+      const note2 = values[3]?.trim() || ""
 
       if (!front) {
         cards.push({ front, back, note, valid: false, error: "正面不能為空" })
@@ -146,7 +148,7 @@ computer,電腦,
         continue
       }
 
-      cards.push({ front, back, note, valid: true })
+      cards.push({ front, back, note, note2, valid: true })
     }
 
     return cards
@@ -193,6 +195,7 @@ computer,電腦,
       front: card.front,
       back: card.back,
       note: card.note || null,
+      note2: card.note2 || null,
       next_review_at: new Date().toISOString(),
       interval: 0,
       ease_factor: 2.5,
@@ -214,7 +217,7 @@ computer,電腦,
 
   const validCount = parsedCards.filter((c) => c.valid).length
   const invalidCount = parsedCards.filter((c) => !c.valid).length
-  const withNoteCount = parsedCards.filter((c) => c.valid && c.note).length
+  const withNoteCount = parsedCards.filter((c) => c.valid && (c.note || c.note2)).length
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -300,6 +303,7 @@ computer,電腦,
                     <th className="px-3 py-2 text-left font-medium text-gray-600">正面</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-600">背面</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-600">備註</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">備註2</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -322,6 +326,9 @@ computer,電腦,
                       </td>
                       <td className="px-3 py-2 text-gray-500">
                         <span className="line-clamp-1">{card.note || "-"}</span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-500">
+                        <span className="line-clamp-1">{card.note2 || "-"}</span>
                       </td>
                     </tr>
                   ))}

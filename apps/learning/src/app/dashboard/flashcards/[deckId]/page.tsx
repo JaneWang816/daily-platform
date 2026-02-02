@@ -59,6 +59,7 @@ interface Flashcard {
   front: string
   back: string
   note: string | null
+  note2: string | null
   ease_factor: number | null
   interval: number | null
   repetition_count: number | null
@@ -86,6 +87,7 @@ export default function DeckDetailPage() {
   const [front, setFront] = useState("")
   const [back, setBack] = useState("")
   const [notes, setNotes] = useState("") 
+  const [notes2, setNotes2] = useState("")
   const [saving, setSaving] = useState(false)
 
   // 下拉選單狀態
@@ -136,6 +138,7 @@ export default function DeckDetailPage() {
     setFront("")
     setBack("")
     setNotes("")
+    setNotes2("")
     setEditingCard(null)
   }
 
@@ -149,6 +152,7 @@ export default function DeckDetailPage() {
     setFront(card.front)
     setBack(card.back)
     setNotes(card.note || "")
+    setNotes2(card.note2 || "")
     setDialogOpen(true)
     setOpenMenuId(null)
   }
@@ -174,6 +178,7 @@ export default function DeckDetailPage() {
           front: front.trim(),
           back: back.trim(),
           note: notes.trim() || null,
+          note2: notes2.trim() || null,
         })
         .eq("id", editingCard.id)
     } else {
@@ -185,6 +190,7 @@ export default function DeckDetailPage() {
           front: front.trim(),
           back: back.trim(),
           note: notes.trim() || null,
+          note2: notes2.trim() || null,
           ease_factor: 2.5,
           interval: 0,
           repetition_count: 0,
@@ -257,7 +263,7 @@ export default function DeckDetailPage() {
     }
 
     // CSV 標題列
-    const headers = ["front", "back", "note"]
+    const headers = ["front", "back", "note", "note2"]
     
     // 轉換資料，處理逗號和換行
     const csvContent = [
@@ -266,7 +272,8 @@ export default function DeckDetailPage() {
         const front = `"${(card.front || "").replace(/"/g, '""')}"`
         const back = `"${(card.back || "").replace(/"/g, '""')}"`
         const note = `"${(card.note || "").replace(/"/g, '""')}"`
-        return [front, back, note].join(",")
+        const note2 = `"${(card.note2 || "").replace(/"/g, '""')}"`
+        return [front, back, note, note2].join(",")
       })
     ].join("\n")
 
@@ -562,9 +569,10 @@ export default function DeckDetailPage() {
               />
             </div>
 
+            {/* 備註1（日文例句） */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>備註（例句）</Label>
+                <Label>備註1（例句）</Label>
                 {notes.trim() && deck?.back_lang && deck.back_lang !== "none" && (
                   <button
                     type="button"
@@ -578,7 +586,29 @@ export default function DeckDetailPage() {
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="例如：I eat an apple every day."
+                placeholder="例如：この浴室は広いです"
+                rows={2}
+              />
+            </div>
+
+            {/* 備註2（中文翻譯） */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>備註2（翻譯）</Label>
+                {notes2.trim() && deck?.front_lang && deck.front_lang !== "none" && (
+                  <button
+                    type="button"
+                    onClick={() => handleSpeak(notes2, deck.front_lang)}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                  >
+                    <Volume2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <Textarea
+                value={notes2}
+                onChange={(e) => setNotes2(e.target.value)}
+                placeholder="例如：這個浴室很寬敞"
                 rows={2}
               />
             </div>
