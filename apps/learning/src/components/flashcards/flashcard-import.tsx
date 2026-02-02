@@ -127,6 +127,7 @@ computer,電腦,,
           front: values[0] || "",
           back: "",
           note: "",
+          note2: "",
           valid: false,
           error: "格式錯誤：缺少背面內容",
         })
