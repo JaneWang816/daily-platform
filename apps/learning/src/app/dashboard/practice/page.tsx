@@ -3,8 +3,24 @@
 
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent, Button } from "@daily/ui"
+import {
+  Card,
+  CardContent,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Label,
+} from "@daily/ui"
 import {
   FileQuestion,
   FolderOpen,
@@ -12,6 +28,10 @@ import {
   Target,
   CheckCircle,
   XCircle,
+  Zap,
+  BookOpen,
+  Layers,
+  Filter,
 } from "lucide-react"
 
 interface Subject {
@@ -21,20 +41,39 @@ interface Subject {
   cover_url: string | null
 }
 
+interface Topic {
+  id: string
+  title: string
+  subject_id: string
+}
+
 interface SubjectWithStats extends Subject {
   questionCount: number
   mistakeCount: number
   masteredCount: number
+  basicCount: number
+  advancedCount: number
+  topics: Topic[]
 }
 
 export default function PracticePage() {
+  const router = useRouter()
   const [subjects, setSubjects] = useState<SubjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [totalStats, setTotalStats] = useState({
     questions: 0,
     mistakes: 0,
     mastered: 0,
+    basic: 0,
+    advanced: 0,
   })
+
+  // 練習選項對話框狀態
+  const [practiceDialogOpen, setPracticeDialogOpen] = useState(false)
+  const [selectedSubject, setSelectedSubject] = useState<SubjectWithStats | null>(null)
+  const [practiceTopicId, setPracticeTopicId] = useState<string>("all")
+  const [practiceDifficulty, setPracticeDifficulty] = useState<string>("all")
+  const [practiceMode, setPracticeMode] = useState<string>("all")
 
   const fetchData = useCallback(async () => {
     const supabase = createClient()
@@ -52,35 +91,47 @@ export default function PracticePage() {
       // 取得每個科目的題目統計
       const subjectsWithStats = await Promise.all(
         (subjectsData as Subject[]).map(async (subject) => {
-          // 總題目數
-          const { count: questionCount } = await supabase
+          // 取得該科目的所有題目（排除子題）
+          const { data: questionsData } = await supabase
             .from("questions")
-            .select("*", { count: "exact", head: true })
+            .select("id, consecutive_correct, attempt_count, difficulty")
             .eq("user_id", user.id)
             .eq("subject_id", subject.id)
+            .is("parent_id", null)
 
-          // 錯題數（consecutive_correct < 3 且有練習過）
-          const { count: mistakeCount } = await supabase
-            .from("questions")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", user.id)
-            .eq("subject_id", subject.id)
-            .lt("consecutive_correct", 3)
-            .gt("attempt_count", 0)
+          const questions = questionsData || []
+          
+          // 計算各項統計
+          const questionCount = questions.length
+          const mistakeCount = questions.filter(
+            q => (q.attempt_count || 0) > 0 && (q.consecutive_correct || 0) < 3
+          ).length
+          const masteredCount = questions.filter(
+            q => (q.consecutive_correct || 0) >= 3
+          ).length
+          const basicCount = questions.filter(
+            q => !q.difficulty || q.difficulty === "basic"
+          ).length
+          const advancedCount = questions.filter(
+            q => q.difficulty === "advanced"
+          ).length
 
-          // 已熟練（consecutive_correct >= 3）
-          const { count: masteredCount } = await supabase
-            .from("questions")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", user.id)
+          // 取得該科目的主題
+          const { data: topicsData } = await supabase
+            .from("topics")
+            .select("id, title, subject_id")
             .eq("subject_id", subject.id)
-            .gte("consecutive_correct", 3)
+            .eq("user_id", user.id)
+            .order("order", { ascending: true })
 
           return {
             ...subject,
-            questionCount: questionCount || 0,
-            mistakeCount: mistakeCount || 0,
-            masteredCount: masteredCount || 0,
+            questionCount,
+            mistakeCount,
+            masteredCount,
+            basicCount,
+            advancedCount,
+            topics: (topicsData || []) as Topic[],
           }
         })
       )
@@ -93,8 +144,10 @@ export default function PracticePage() {
           questions: acc.questions + s.questionCount,
           mistakes: acc.mistakes + s.mistakeCount,
           mastered: acc.mastered + s.masteredCount,
+          basic: acc.basic + s.basicCount,
+          advanced: acc.advanced + s.advancedCount,
         }),
-        { questions: 0, mistakes: 0, mastered: 0 }
+        { questions: 0, mistakes: 0, mastered: 0, basic: 0, advanced: 0 }
       )
       setTotalStats(totals)
     }
@@ -105,6 +158,45 @@ export default function PracticePage() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // 開啟練習選項對話框
+  const openPracticeDialog = (subject: SubjectWithStats) => {
+    setSelectedSubject(subject)
+    setPracticeTopicId("all")
+    setPracticeDifficulty("all")
+    setPracticeMode("all")
+    setPracticeDialogOpen(true)
+  }
+
+  // 開始練習
+  const startPractice = () => {
+    if (!selectedSubject) return
+
+    const params = new URLSearchParams()
+    params.set("subject", selectedSubject.id)
+    
+    if (practiceTopicId !== "all") {
+      params.set("topic", practiceTopicId)
+    }
+    if (practiceDifficulty !== "all") {
+      params.set("difficulty", practiceDifficulty)
+    }
+    if (practiceMode !== "all") {
+      params.set("mode", practiceMode)
+    }
+
+    setPracticeDialogOpen(false)
+    router.push(`/dashboard/practice/session?${params.toString()}`)
+  }
+
+  // 快速隨機練習（所有科目）
+  const startRandomPractice = () => {
+    const params = new URLSearchParams()
+    if (practiceDifficulty !== "all") {
+      params.set("difficulty", practiceDifficulty)
+    }
+    router.push(`/dashboard/practice/session${params.toString() ? '?' + params.toString() : ''}`)
+  }
 
   if (loading) {
     return (
@@ -123,7 +215,7 @@ export default function PracticePage() {
           <p className="text-gray-600 mt-1">選擇科目開始練習</p>
         </div>
         {totalStats.mistakes > 0 && (
-          <Link href="/dashboard/mistakes">
+          <Link href="/dashboard/practice/session?mode=mistakes">
             <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
               <XCircle className="w-4 h-4 mr-2" />
               錯題本 ({totalStats.mistakes})
@@ -133,12 +225,26 @@ export default function PracticePage() {
       </div>
 
       {/* 總統計 */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
             <FileQuestion className="w-6 h-6 text-indigo-500 mx-auto mb-2" />
             <p className="text-2xl font-bold text-gray-800">{totalStats.questions}</p>
             <p className="text-sm text-gray-500">總題目</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <BookOpen className="w-6 h-6 text-green-500 mx-auto mb-2" />
+            <p className="text-2xl font-bold text-green-600">{totalStats.basic}</p>
+            <p className="text-sm text-gray-500">基礎題</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <Zap className="w-6 h-6 text-orange-500 mx-auto mb-2" />
+            <p className="text-2xl font-bold text-orange-600">{totalStats.advanced}</p>
+            <p className="text-sm text-gray-500">進階題</p>
           </CardContent>
         </Card>
         <Card>
@@ -150,8 +256,8 @@ export default function PracticePage() {
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <CheckCircle className="w-6 h-6 text-green-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-green-600">{totalStats.mastered}</p>
+            <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto mb-2" />
+            <p className="text-2xl font-bold text-emerald-600">{totalStats.mastered}</p>
             <p className="text-sm text-gray-500">已熟練</p>
           </CardContent>
         </Card>
@@ -193,19 +299,29 @@ export default function PracticePage() {
                       <p className="text-sm text-gray-500 mt-1 line-clamp-1">{subject.description}</p>
                     )}
 
-                    {/* 統計 */}
-                    <div className="flex items-center gap-4 mt-2 text-sm">
-                      <span className="text-gray-500">
+                    {/* 統計標籤 */}
+                    <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
                         {subject.questionCount} 題
                       </span>
+                      {subject.basicCount > 0 && (
+                        <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded">
+                          基礎 {subject.basicCount}
+                        </span>
+                      )}
+                      {subject.advancedCount > 0 && (
+                        <span className="px-2 py-0.5 bg-orange-50 text-orange-600 rounded">
+                          進階 {subject.advancedCount}
+                        </span>
+                      )}
                       {subject.mistakeCount > 0 && (
-                        <span className="text-red-500">
-                          {subject.mistakeCount} 待加強
+                        <span className="px-2 py-0.5 bg-red-50 text-red-600 rounded">
+                          待加強 {subject.mistakeCount}
                         </span>
                       )}
                       {subject.masteredCount > 0 && (
-                        <span className="text-green-500">
-                          {subject.masteredCount} 已熟練
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded">
+                          已熟練 {subject.masteredCount}
                         </span>
                       )}
                     </div>
@@ -215,7 +331,7 @@ export default function PracticePage() {
                       <div className="mt-3">
                         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-green-500 transition-all"
+                            className="h-full bg-emerald-500 transition-all"
                             style={{
                               width: `${(subject.masteredCount / subject.questionCount) * 100}%`,
                             }}
@@ -235,15 +351,14 @@ export default function PracticePage() {
                     </Button>
                   </Link>
                   {subject.questionCount > 0 && (
-                    <Link
-                      href={`/dashboard/practice/session?subject=${subject.id}`}
-                      className="flex-1"
+                    <Button
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                      size="sm"
+                      onClick={() => openPracticeDialog(subject)}
                     >
-                      <Button className="w-full bg-indigo-600 hover:bg-indigo-700" size="sm">
-                        <Play className="w-4 h-4 mr-2" />
-                        開始練習
-                      </Button>
-                    </Link>
+                      <Play className="w-4 h-4 mr-2" />
+                      開始練習
+                    </Button>
                   )}
                 </div>
               </CardContent>
@@ -273,6 +388,148 @@ export default function PracticePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* 練習選項對話框 */}
+      <Dialog open={practiceDialogOpen} onOpenChange={setPracticeDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-indigo-600" />
+              練習設定
+            </DialogTitle>
+            <DialogDescription>
+              選擇練習範圍和難度
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* 科目名稱 */}
+            <div className="p-3 bg-indigo-50 rounded-lg">
+              <p className="text-sm text-indigo-600 font-medium">
+                {selectedSubject?.title}
+              </p>
+              <p className="text-xs text-indigo-500 mt-1">
+                共 {selectedSubject?.questionCount} 題
+              </p>
+            </div>
+
+            {/* 主題選擇 */}
+            {selectedSubject && selectedSubject.topics.length > 0 && (
+              <div className="space-y-2">
+                <Label>練習範圍</Label>
+                <Select value={practiceTopicId} onValueChange={setPracticeTopicId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部主題</SelectItem>
+                    {selectedSubject.topics.map((topic) => (
+                      <SelectItem key={topic.id} value={topic.id}>
+                        {topic.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* 難易度選擇 */}
+            <div className="space-y-2">
+              <Label>難易度</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPracticeDifficulty("all")}
+                  className={`p-3 rounded-lg border-2 transition-colors text-center ${
+                    practiceDifficulty === "all"
+                      ? "border-indigo-500 bg-indigo-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <Layers className={`w-5 h-5 mx-auto mb-1 ${
+                    practiceDifficulty === "all" ? "text-indigo-600" : "text-gray-400"
+                  }`} />
+                  <span className={`text-sm font-medium ${
+                    practiceDifficulty === "all" ? "text-indigo-700" : "text-gray-600"
+                  }`}>
+                    全部
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPracticeDifficulty("basic")}
+                  className={`p-3 rounded-lg border-2 transition-colors text-center ${
+                    practiceDifficulty === "basic"
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <BookOpen className={`w-5 h-5 mx-auto mb-1 ${
+                    practiceDifficulty === "basic" ? "text-green-600" : "text-gray-400"
+                  }`} />
+                  <span className={`text-sm font-medium ${
+                    practiceDifficulty === "basic" ? "text-green-700" : "text-gray-600"
+                  }`}>
+                    基礎
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPracticeDifficulty("advanced")}
+                  className={`p-3 rounded-lg border-2 transition-colors text-center ${
+                    practiceDifficulty === "advanced"
+                      ? "border-orange-500 bg-orange-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <Zap className={`w-5 h-5 mx-auto mb-1 ${
+                    practiceDifficulty === "advanced" ? "text-orange-600" : "text-gray-400"
+                  }`} />
+                  <span className={`text-sm font-medium ${
+                    practiceDifficulty === "advanced" ? "text-orange-700" : "text-gray-600"
+                  }`}>
+                    進階
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* 練習模式 */}
+            <div className="space-y-2">
+              <Label>練習模式</Label>
+              <Select value={practiceMode} onValueChange={setPracticeMode}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部題目</SelectItem>
+                  <SelectItem value="new">只練新題</SelectItem>
+                  <SelectItem value="mistakes">只練錯題</SelectItem>
+                  <SelectItem value="review">複習已熟練</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* 按鈕 */}
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setPracticeDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+              onClick={startPractice}
+            >
+              <Play className="w-4 h-4 mr-2" />
+              開始練習
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

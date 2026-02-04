@@ -635,3 +635,105 @@ export function formatDateShort(dateStr: string): string {
 export function formatDateISO(date: Date): string {
   return date.toISOString().split('T')[0]
 }
+
+// ============================================
+// 題目難易度類型
+// ============================================
+export type QuestionDifficulty = 'basic' | 'advanced'
+
+// 難易度標籤對照
+export const DIFFICULTY_LABELS: Record<QuestionDifficulty, string> = {
+  basic: '基礎',
+  advanced: '進階',
+}
+
+// 難易度選項（用於下拉選單）
+export const DIFFICULTY_OPTIONS = [
+  { value: 'basic', label: '基礎', color: 'bg-green-100 text-green-700' },
+  { value: 'advanced', label: '進階', color: 'bg-orange-100 text-orange-700' },
+] as const
+
+// ============================================
+// 題目擴充類型（含關聯資料）
+// ============================================
+
+// 題目含單元資訊
+export type QuestionWithUnit = Question & {
+  units?: Unit | null
+}
+
+// 題組母題含子題
+export type QuestionGroup = Question & {
+  children?: Question[]
+}
+
+// 完整題目（含所有關聯）
+export type QuestionFull = Question & {
+  question_types?: QuestionType | null
+  units?: {
+    id: string
+    title: string
+    topic_id: string
+    topics?: {
+      id: string
+      title: string
+      subject_id: string
+    } | null
+  } | null
+  children?: Question[]  // 題組子題
+}
+
+// ============================================
+// 練習篩選條件類型
+// ============================================
+export type PracticeFilter = {
+  subjectId?: string
+  topicId?: string
+  unitId?: string
+  difficulty?: QuestionDifficulty | 'all'
+  mode?: 'all' | 'mistakes' | 'new' | 'review'
+}
+
+// ============================================
+// 題目統計類型
+// ============================================
+export type QuestionStats = {
+  total: number
+  basic: number
+  advanced: number
+  mastered: number
+  mistakes: number
+  new: number
+}
+
+// ============================================
+// 輔助函數
+// ============================================
+
+// 判斷題目是否已熟練（連續正確 >= 3）
+export function isQuestionMastered(question: Question): boolean {
+  return (question.consecutive_correct ?? 0) >= 3
+}
+
+// 判斷題目是否為待加強（有練習過但連續正確 < 3）
+export function isQuestionMistake(question: Question): boolean {
+  return (question.attempt_count ?? 0) > 0 && (question.consecutive_correct ?? 0) < 3
+}
+
+// 判斷題目是否為新題（未練習過）
+export function isQuestionNew(question: Question): boolean {
+  return (question.attempt_count ?? 0) === 0
+}
+
+// 取得題目狀態
+export function getQuestionStatus(question: Question): 'mastered' | 'mistake' | 'new' {
+  if (isQuestionMastered(question)) return 'mastered'
+  if (isQuestionMistake(question)) return 'mistake'
+  return 'new'
+}
+
+// 取得難易度標籤
+export function getDifficultyLabel(difficulty: string | null): string {
+  if (difficulty === 'advanced') return '進階'
+  return '基礎'
+}

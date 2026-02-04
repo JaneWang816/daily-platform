@@ -1250,6 +1250,45 @@ export type Database = {
           },
         ]
       }
+      practice_sessions: {
+        Row: {
+          correct_count: number
+          created_at: string | null
+          duration: number | null
+          id: string
+          module: string
+          score: number
+          subject: string
+          topic: string
+          total_questions: number
+          user_id: string
+        }
+        Insert: {
+          correct_count: number
+          created_at?: string | null
+          duration?: number | null
+          id?: string
+          module: string
+          score: number
+          subject: string
+          topic: string
+          total_questions: number
+          user_id: string
+        }
+        Update: {
+          correct_count?: number
+          created_at?: string | null
+          duration?: number | null
+          id?: string
+          module?: string
+          score?: number
+          subject?: string
+          topic?: string
+          total_questions?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1350,6 +1389,7 @@ export type Database = {
           consecutive_correct: number | null
           content: string
           created_at: string | null
+          difficulty: string | null
           explanation: string | null
           id: string
           image_url: string | null
@@ -1357,9 +1397,11 @@ export type Database = {
           last_attempted_at: string | null
           marked_for_review: boolean | null
           options: Json | null
+          order: number | null
           parent_id: string | null
           question_type_id: string
           subject_id: string
+          unit_id: string | null
           updated_at: string | null
           user_id: string
           wrong_count: number | null
@@ -1370,6 +1412,7 @@ export type Database = {
           consecutive_correct?: number | null
           content: string
           created_at?: string | null
+          difficulty?: string | null
           explanation?: string | null
           id?: string
           image_url?: string | null
@@ -1377,9 +1420,11 @@ export type Database = {
           last_attempted_at?: string | null
           marked_for_review?: boolean | null
           options?: Json | null
+          order?: number | null
           parent_id?: string | null
           question_type_id: string
           subject_id: string
+          unit_id?: string | null
           updated_at?: string | null
           user_id: string
           wrong_count?: number | null
@@ -1390,6 +1435,7 @@ export type Database = {
           consecutive_correct?: number | null
           content?: string
           created_at?: string | null
+          difficulty?: string | null
           explanation?: string | null
           id?: string
           image_url?: string | null
@@ -1397,9 +1443,11 @@ export type Database = {
           last_attempted_at?: string | null
           marked_for_review?: boolean | null
           options?: Json | null
+          order?: number | null
           parent_id?: string | null
           question_type_id?: string
           subject_id?: string
+          unit_id?: string | null
           updated_at?: string | null
           user_id?: string
           wrong_count?: number | null
@@ -1424,6 +1472,13 @@ export type Database = {
             columns: ["subject_id"]
             isOneToOne: false
             referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questions_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
           {
