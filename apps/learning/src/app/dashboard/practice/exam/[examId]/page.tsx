@@ -15,11 +15,11 @@ import {
   CheckCircle,
   XCircle,
   Trophy,
-  Download,
   RotateCcw,
   AlertCircle,
   Loader2,
 } from "lucide-react"
+import { ExamPDFDownloadButton } from "@/components/questions/exam-pdf-document"
 
 interface QuestionType {
   id: string
@@ -606,120 +606,6 @@ export default function ExamPage() {
     }
   }
 
-  // 匯出 PDF
-  const handleExportPDF = async (includeAnswers: boolean) => {
-    // 動態載入 jsPDF
-    const { jsPDF } = await import("jspdf")
-
-    const doc = new jsPDF()
-    const pageWidth = doc.internal.pageSize.getWidth()
-    let y = 20
-
-    // 標題
-    doc.setFontSize(18)
-    doc.text(exam?.subjects?.title || "試卷", pageWidth / 2, y, { align: "center" })
-    y += 10
-
-    // 資訊
-    doc.setFontSize(10)
-    doc.text(`試卷編號: ${exam?.exam_code}`, 20, y)
-    y += 6
-    doc.text(`日期: ${new Date(exam?.created_at || "").toLocaleDateString()}`, 20, y)
-    y += 6
-    doc.text(`總分: ${exam?.total_score} 分`, 20, y)
-    if (includeAnswers && exam?.earned_score !== null) {
-      doc.text(`得分: ${exam?.earned_score} 分`, 100, y)
-    }
-    y += 10
-
-    // 題目
-    let questionNumber = 1
-    for (const examAnswer of examAnswers) {
-      const question = examAnswer.question
-      if (!question) continue
-
-      // 檢查是否需要換頁
-      if (y > 270) {
-        doc.addPage()
-        y = 20
-      }
-
-      if (question.is_group && question.children) {
-        // 題組題幹
-        doc.setFontSize(11)
-        doc.text(`【題組】${question.content}`, 20, y, { maxWidth: pageWidth - 40 })
-        y += 8
-
-        // 子題
-        for (const child of question.children) {
-          if (y > 270) {
-            doc.addPage()
-            y = 20
-          }
-
-          doc.setFontSize(10)
-          doc.text(`${questionNumber}. ${child.content}`, 25, y, { maxWidth: pageWidth - 50 })
-          y += 6
-
-          // 選項
-          if (child.options) {
-            Object.entries(child.options).forEach(([key, value]) => {
-              doc.text(`  ${key}. ${value}`, 30, y)
-              y += 5
-            })
-          }
-
-          // 答案
-          if (includeAnswers) {
-            const userAns = answers[child.id] || "(未作答)"
-            const correctAns = getCorrectAnswer(child)
-            const isCorrect = userAns === correctAns
-            doc.setTextColor(isCorrect ? 0 : 255, isCorrect ? 128 : 0, 0)
-            doc.text(`答案: ${userAns} ${isCorrect ? "✓" : "✗"} (正確: ${correctAns})`, 30, y)
-            doc.setTextColor(0, 0, 0)
-            y += 6
-          }
-
-          y += 4
-          questionNumber++
-        }
-      } else {
-        // 一般題目
-        doc.setFontSize(10)
-        doc.text(`${questionNumber}. ${question.content}`, 20, y, { maxWidth: pageWidth - 40 })
-        y += 6
-
-        // 選項
-        if (question.options) {
-          Object.entries(question.options).forEach(([key, value]) => {
-            doc.text(`  ${key}. ${value}`, 25, y)
-            y += 5
-          })
-        }
-
-        // 答案
-        if (includeAnswers) {
-          const userAns = answers[question.id] || "(未作答)"
-          const correctAns = getCorrectAnswer(question)
-          const isCorrect = userAns === correctAns
-          doc.setTextColor(isCorrect ? 0 : 255, isCorrect ? 128 : 0, 0)
-          doc.text(`答案: ${userAns} ${isCorrect ? "✓" : "✗"} (正確: ${correctAns})`, 25, y)
-          doc.setTextColor(0, 0, 0)
-          y += 6
-        }
-
-        y += 6
-        questionNumber++
-      }
-    }
-
-    // 下載
-    const fileName = includeAnswers
-      ? `${exam?.exam_code}_含答案.pdf`
-      : `${exam?.exam_code}_空白試卷.pdf`
-    doc.save(fileName)
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -787,14 +673,18 @@ export default function ExamPage() {
 
             {/* 操作按鈕 */}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => handleExportPDF(false)}>
-                <Download className="w-4 h-4 mr-1" />
-                空白試卷
-              </Button>
-              <Button variant="outline" onClick={() => handleExportPDF(true)}>
-                <Download className="w-4 h-4 mr-1" />
-                含答案
-              </Button>
+              <ExamPDFDownloadButton
+                exam={exam}
+                examAnswers={examAnswers}
+                userAnswers={answers}
+                includeAnswers={false}
+              />
+              <ExamPDFDownloadButton
+                exam={exam}
+                examAnswers={examAnswers}
+                userAnswers={answers}
+                includeAnswers={true}
+              />
               <div className="flex-1" />
               <Link href={`/dashboard/practice/${exam.subject_id}`}>
                 <Button>

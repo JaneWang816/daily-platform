@@ -218,11 +218,20 @@ export function ExamGeneratorDialog({
     return typeConfigs
   }
 
-  // 更新題型數量
+  // 更新題型數量（增減）
   const updateTypeCount = (typeId: string, delta: number) => {
     setTypeConfigs(prev => prev.map(config => {
       if (config.typeId !== typeId) return config
       const newCount = Math.max(0, Math.min(config.available, config.count + delta))
+      return { ...config, count: newCount }
+    }))
+  }
+
+  // 直接設定題型數量
+  const setTypeCount = (typeId: string, value: number) => {
+    setTypeConfigs(prev => prev.map(config => {
+      if (config.typeId !== typeId) return config
+      const newCount = Math.max(0, Math.min(config.available, value))
       return { ...config, count: newCount }
     }))
   }
@@ -511,7 +520,14 @@ export function ExamGeneratorDialog({
                     >
                       <Minus className="w-4 h-4" />
                     </button>
-                    <span className="w-8 text-center font-medium">{config.count}</span>
+                    <input
+                      type="number"
+                      value={config.count}
+                      onChange={(e) => setTypeCount(config.typeId, parseInt(e.target.value) || 0)}
+                      min={0}
+                      max={config.available}
+                      className="w-12 h-8 text-center font-medium border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
                     <button
                       onClick={() => updateTypeCount(config.typeId, 1)}
                       disabled={config.count >= config.available}

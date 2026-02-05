@@ -209,6 +209,129 @@ export type Database = {
           },
         ]
       }
+      exam_answers: {
+        Row: {
+          created_at: string | null
+          earned_score: number | null
+          exam_id: string
+          id: string
+          is_correct: boolean | null
+          question_id: string
+          question_order: number
+          score: number
+          user_answer: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          earned_score?: number | null
+          exam_id: string
+          id?: string
+          is_correct?: boolean | null
+          question_id: string
+          question_order: number
+          score?: number
+          user_answer?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          earned_score?: number | null
+          exam_id?: string
+          id?: string
+          is_correct?: boolean | null
+          question_id?: string
+          question_order?: number
+          score?: number
+          user_answer?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_answers_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exams: {
+        Row: {
+          completed_at: string | null
+          correct_count: number | null
+          created_at: string | null
+          earned_score: number | null
+          exam_code: string
+          id: string
+          question_count: number
+          started_at: string | null
+          status: string
+          subject_id: string
+          time_spent_seconds: number | null
+          topic_ids: string[] | null
+          total_score: number
+          unit_ids: string[] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          correct_count?: number | null
+          created_at?: string | null
+          earned_score?: number | null
+          exam_code: string
+          id?: string
+          question_count: number
+          started_at?: string | null
+          status?: string
+          subject_id: string
+          time_spent_seconds?: number | null
+          topic_ids?: string[] | null
+          total_score?: number
+          unit_ids?: string[] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          correct_count?: number | null
+          created_at?: string | null
+          earned_score?: number | null
+          exam_code?: string
+          id?: string
+          question_count?: number
+          started_at?: string | null
+          status?: string
+          subject_id?: string
+          time_spent_seconds?: number | null
+          topic_ids?: string[] | null
+          total_score?: number
+          unit_ids?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exams_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exams_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_categories: {
         Row: {
           color: string | null
