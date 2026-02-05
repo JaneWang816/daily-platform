@@ -11,6 +11,7 @@ import {
   Button,
   Input,
   Label,
+  Textarea,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -27,19 +28,20 @@ import {
 } from "@daily/ui"
 import {
   Plus,
+  ChevronLeft,
   ChevronRight,
   MoreVertical,
   Pencil,
   Trash2,
   FolderOpen,
   GripVertical,
+  BookOpen,
 } from "lucide-react"
 
 interface Subject {
   id: string
   title: string
   description: string | null
-  cover_url: string | null
 }
 
 interface Topic {
@@ -80,7 +82,7 @@ export default function TopicsPage() {
     // 取得科目資訊
     const { data: subjectData } = await supabase
       .from("subjects")
-      .select("*")
+      .select("id, title, description")
       .eq("id", subjectId)
       .single()
 
@@ -91,7 +93,7 @@ export default function TopicsPage() {
     // 取得主題列表
     const { data: topicsData } = await supabase
       .from("topics")
-      .select("id, title, subject_id, order, user_id")
+      .select("*")
       .eq("subject_id", subjectId)
       .order("order", { ascending: true })
 
@@ -148,14 +150,10 @@ export default function TopicsPage() {
     }
 
     if (editingTopic) {
-      // 更新
       await (supabase.from("topics") as any)
-        .update({
-          title: title.trim(),
-        })
+        .update({ title: title.trim() })
         .eq("id", editingTopic.id)
     } else {
-      // 取得最大 order
       const { data: maxOrderData } = await supabase
         .from("topics")
         .select("order")
@@ -166,7 +164,6 @@ export default function TopicsPage() {
 
       const newOrder = (maxOrderData?.order ?? -1) + 1
 
-      // 新增
       await (supabase.from("topics") as any)
         .insert({
           user_id: user.id,
@@ -233,17 +230,13 @@ export default function TopicsPage() {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-100"
-            >
-              <FolderOpen
-                className="w-5 h-5 text-indigo-600"
-              />
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-100">
+              <BookOpen className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-800">{subject.title}</h1>
               {subject.description && (
-                <p className="text-gray-600 text-sm">{subject.description}</p>
+                <p className="text-gray-500 text-sm">{subject.description}</p>
               )}
             </div>
           </div>
@@ -274,41 +267,34 @@ export default function TopicsPage() {
             <Card
               key={topic.id}
               className="hover:shadow-md transition-shadow relative group"
+              style={{ zIndex: openMenuId === topic.id ? 50 : 1 }}
             >
               <Link href={`/dashboard/subjects/${subjectId}/${topic.id}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
-                    {/* 排序把手 */}
                     <div className="text-gray-300 cursor-grab">
                       <GripVertical className="w-5 h-5" />
                     </div>
 
-                    {/* 序號 */}
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-indigo-100 text-indigo-600"
-                    >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-indigo-100 text-indigo-600">
                       {index + 1}
                     </div>
 
-                    {/* 內容 */}
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-gray-800">{topic.title}</h3>
-                      <p className="text-sm text-gray-500">點擊查看單元</p>
                     </div>
 
-                    {/* 單元數 */}
                     <span className="text-sm text-gray-400">
                       {topic.unit_count} 個單元
                     </span>
 
-                    {/* 箭頭 */}
                     <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
                   </div>
                 </CardContent>
               </Link>
 
-              {/* 更多選單按鈕 */}
-              <div className="absolute top-1/2 -translate-y-1/2 right-12">
+              {/* 更多選單 - 修正 z-index */}
+              <div className="absolute top-1/2 -translate-y-1/2 right-12 z-10">
                 <button
                   onClick={(e) => {
                     e.preventDefault()
@@ -323,10 +309,14 @@ export default function TopicsPage() {
                 {openMenuId === topic.id && (
                   <>
                     <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setOpenMenuId(null)}
+                      className="fixed inset-0 z-40"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setOpenMenuId(null)
+                      }}
                     />
-                    <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                    <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                       <button
                         onClick={(e) => {
                           e.preventDefault()
@@ -366,17 +356,17 @@ export default function TopicsPage() {
               {editingTopic ? "編輯主題" : "新增主題"}
             </DialogTitle>
             <DialogDescription>
-              {editingTopic ? "修改主題名稱" : "建立新的學習主題或章節"}
+              {editingTopic ? "修改主題名稱" : "在此科目下建立新的主題"}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label>主題名稱 *</Label>
+              <Label>主題名稱</Label>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="例如：第一章、代數基礎..."
+                placeholder="例如：第一章 緒論、Unit 1..."
               />
             </div>
 

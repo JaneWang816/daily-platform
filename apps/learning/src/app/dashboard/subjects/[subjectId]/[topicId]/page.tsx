@@ -28,7 +28,6 @@ import {
 } from "@daily/ui"
 import {
   Plus,
-  ChevronLeft,
   ChevronRight,
   MoreVertical,
   Pencil,
@@ -70,18 +69,15 @@ export default function UnitsPage() {
   const [units, setUnits] = useState<Unit[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Dialog 狀態
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [unitToDelete, setUnitToDelete] = useState<Unit | null>(null)
 
-  // 表單狀態
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [saving, setSaving] = useState(false)
 
-  // 下拉選單狀態
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
@@ -89,29 +85,22 @@ export default function UnitsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // 取得科目資訊
     const { data: subjectData } = await supabase
       .from("subjects")
       .select("id, title, description")
       .eq("id", subjectId)
       .single()
 
-    if (subjectData) {
-      setSubject(subjectData as Subject)
-    }
+    if (subjectData) setSubject(subjectData as Subject)
 
-    // 取得主題資訊
     const { data: topicData } = await supabase
       .from("topics")
       .select("id, title, subject_id")
       .eq("id", topicId)
       .single()
 
-    if (topicData) {
-      setTopic(topicData as Topic)
-    }
+    if (topicData) setTopic(topicData as Topic)
 
-    // 取得單元列表
     const { data: unitsData } = await supabase
       .from("units")
       .select("*")
@@ -119,7 +108,6 @@ export default function UnitsPage() {
       .order("order", { ascending: true })
 
     if (unitsData) {
-      // 取得每個單元的筆記數量
       const unitsWithCount = await Promise.all(
         (unitsData as Unit[]).map(async (unit) => {
           const { count } = await supabase
@@ -135,9 +123,7 @@ export default function UnitsPage() {
     setLoading(false)
   }, [subjectId, topicId])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  useEffect(() => { fetchData() }, [fetchData])
 
   const resetForm = () => {
     setTitle("")
@@ -167,21 +153,13 @@ export default function UnitsPage() {
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setSaving(false)
-      return
-    }
+    if (!user) { setSaving(false); return }
 
     if (editingUnit) {
-      // 更新
       await (supabase.from("units") as any)
-        .update({
-          title: title.trim(),
-          content: content.trim() || null,
-        })
+        .update({ title: title.trim(), content: content.trim() || null })
         .eq("id", editingUnit.id)
     } else {
-      // 取得最大 order
       const { data: maxOrderData } = await supabase
         .from("units")
         .select("order")
@@ -192,7 +170,6 @@ export default function UnitsPage() {
 
       const newOrder = (maxOrderData?.order ?? -1) + 1
 
-      // 新增
       await (supabase.from("units") as any)
         .insert({
           user_id: user.id,
@@ -213,9 +190,7 @@ export default function UnitsPage() {
     if (!unitToDelete) return
 
     const supabase = createClient()
-    await (supabase.from("units") as any)
-      .delete()
-      .eq("id", unitToDelete.id)
+    await (supabase.from("units") as any).delete().eq("id", unitToDelete.id)
 
     setDeleteDialogOpen(false)
     setUnitToDelete(null)
@@ -252,32 +227,21 @@ export default function UnitsPage() {
       {/* 麵包屑 + 標題 */}
       <div>
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-2 flex-wrap">
-          <Link href="/dashboard/subjects" className="hover:text-indigo-600">
-            科目管理
-          </Link>
+          <Link href="/dashboard/subjects" className="hover:text-indigo-600">科目管理</Link>
           <ChevronRight className="w-4 h-4" />
-          <Link href={`/dashboard/subjects/${subjectId}`} className="hover:text-indigo-600">
-            {subject.title}
-          </Link>
+          <Link href={`/dashboard/subjects/${subjectId}`} className="hover:text-indigo-600">{subject.title}</Link>
           <ChevronRight className="w-4 h-4" />
           <span className="text-gray-800">{topic.title}</span>
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-100"
-            >
-              <FolderOpen
-                className="w-5 h-5 text-indigo-600"
-              />
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-100">
+              <FolderOpen className="w-5 h-5 text-indigo-600" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">{topic.title}</h1>
-            </div>
+            <h1 className="text-2xl font-bold text-gray-800">{topic.title}</h1>
           </div>
           <Button onClick={openCreateDialog} className="bg-indigo-600 hover:bg-indigo-700">
-            <Plus className="w-4 h-4 mr-2" />
-            新增單元
+            <Plus className="w-4 h-4 mr-2" />新增單元
           </Button>
         </div>
       </div>
@@ -291,8 +255,7 @@ export default function UnitsPage() {
             </div>
             <p className="text-gray-500 mb-4">還沒有任何單元</p>
             <Button onClick={openCreateDialog} variant="outline">
-              <Plus className="w-4 h-4 mr-2" />
-              建立第一個單元
+              <Plus className="w-4 h-4 mr-2" />建立第一個單元
             </Button>
           </CardContent>
         </Card>
@@ -302,43 +265,33 @@ export default function UnitsPage() {
             <Card
               key={unit.id}
               className="hover:shadow-md transition-shadow relative group"
+              style={{ zIndex: openMenuId === unit.id ? 50 : 1 }}
             >
               <Link href={`/dashboard/subjects/${subjectId}/${topicId}/${unit.id}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
-                    {/* 排序把手 */}
                     <div className="text-gray-300 cursor-grab">
                       <GripVertical className="w-5 h-5" />
                     </div>
 
-                    {/* 序號 */}
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-indigo-100 text-indigo-600"
-                    >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-indigo-100 text-indigo-600">
                       {index + 1}
                     </div>
 
-                    {/* 內容 */}
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-gray-800">{unit.title}</h3>
-                      {unit.content && (
-                        <p className="text-sm text-gray-500 truncate">{unit.content}</p>
-                      )}
+                      {unit.content && <p className="text-sm text-gray-500 truncate">{unit.content}</p>}
                     </div>
 
-                    {/* 筆記數 */}
-                    <span className="text-sm text-gray-400">
-                      {unit.note_count} 則筆記
-                    </span>
+                    <span className="text-sm text-gray-400">{unit.note_count} 則筆記</span>
 
-                    {/* 箭頭 */}
                     <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-gray-500 transition-colors" />
                   </div>
                 </CardContent>
               </Link>
 
-              {/* 更多選單按鈕 */}
-              <div className="absolute top-1/2 -translate-y-1/2 right-12">
+              {/* 更多選單 - 修正 z-index */}
+              <div className="absolute top-1/2 -translate-y-1/2 right-12 z-10">
                 <button
                   onClick={(e) => {
                     e.preventDefault()
@@ -353,10 +306,14 @@ export default function UnitsPage() {
                 {openMenuId === unit.id && (
                   <>
                     <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setOpenMenuId(null)}
+                      className="fixed inset-0 z-40"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setOpenMenuId(null)
+                      }}
                     />
-                    <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                    <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                       <button
                         onClick={(e) => {
                           e.preventDefault()
@@ -365,8 +322,7 @@ export default function UnitsPage() {
                         }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        <Pencil className="w-4 h-4" />
-                        編輯
+                        <Pencil className="w-4 h-4" />編輯
                       </button>
                       <button
                         onClick={(e) => {
@@ -376,8 +332,7 @@ export default function UnitsPage() {
                         }}
                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                       >
-                        <Trash2 className="w-4 h-4" />
-                        刪除
+                        <Trash2 className="w-4 h-4" />刪除
                       </button>
                     </div>
                   </>
@@ -388,67 +343,42 @@ export default function UnitsPage() {
         </div>
       )}
 
-      {/* 新增/編輯 Dialog */}
+      {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {editingUnit ? "編輯單元" : "新增單元"}
-            </DialogTitle>
-            <DialogDescription>
-              {editingUnit ? "修改單元資訊" : "在此主題下建立新的單元"}
-            </DialogDescription>
+            <DialogTitle>{editingUnit ? "編輯單元" : "新增單元"}</DialogTitle>
+            <DialogDescription>{editingUnit ? "修改單元資訊" : "在此主題下建立新的單元"}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label>單元名稱</Label>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="例如：1-1 整數的加減、2-2 一元一次方程式..."
-              />
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例如：1-1 整數的加減、2-2 一元一次方程式..." />
             </div>
 
             <div className="space-y-2">
               <Label>說明（選填）</Label>
-              <Textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="簡短說明這個單元的重點..."
-                rows={3}
-              />
+              <Textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="簡短說明這個單元的重點..." rows={3} />
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                取消
-              </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? "儲存中..." : "儲存"}
-              </Button>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>取消</Button>
+              <Button onClick={handleSave} disabled={saving}>{saving ? "儲存中..." : "儲存"}</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* 刪除確認 Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>確定要刪除嗎？</AlertDialogTitle>
-            <AlertDialogDescription>
-              刪除「{unitToDelete?.title}」將會同時刪除所有相關的筆記。此操作無法復原。
-            </AlertDialogDescription>
+            <AlertDialogDescription>刪除「{unitToDelete?.title}」將會同時刪除所有相關的筆記。此操作無法復原。</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              刪除
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">刪除</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
