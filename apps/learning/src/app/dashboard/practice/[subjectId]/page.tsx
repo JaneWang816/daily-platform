@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { ExamGeneratorDialog } from "@/components/questions/exam-generator-dialog"
 import {
   Card,
   CardContent,
@@ -37,6 +38,8 @@ import {
   ChevronDown,
   ChevronRight,
   FileQuestion,
+  FileText,
+  History,
   MoreVertical,
   Pencil,
   Trash2,
@@ -193,6 +196,8 @@ export default function SubjectQuestionsPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [filterDifficulty, setFilterDifficulty] = useState<string>("all")
   const [filterTopicId, setFilterTopicId] = useState<string>("all")
+
+  const [examDialogOpen, setExamDialogOpen] = useState(false)
 
   const selectedTopicUnits = topicsWithUnits.find(t => t.id === selectedTopicId)?.units || []
 
@@ -1142,6 +1147,22 @@ export default function SubjectQuestionsPage() {
           </Button>
           
           <div className="flex-1" />
+
+                    {/* 試卷按鈕 */}
+          <Link href="/dashboard/practice/exams">
+            <Button variant="outline" size="sm">
+              <History className="w-4 h-4 mr-1" />
+              試卷記錄
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setExamDialogOpen(true)}
+          >
+            <FileText className="w-4 h-4 mr-1" />
+            產生試卷
+          </Button>
           
           {/* ✨ 匯入按鈕 */}
           <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
@@ -1157,6 +1178,7 @@ export default function SubjectQuestionsPage() {
           >
             <Download className="w-4 h-4 mr-2" />匯出
           </Button>
+
         </div>
       </div>
 
@@ -1724,6 +1746,16 @@ export default function SubjectQuestionsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 試卷產生 Dialog */}
+      <ExamGeneratorDialog
+        open={examDialogOpen}
+        onOpenChange={setExamDialogOpen}
+        subjectId={subjectId}
+        subjectTitle={subject?.title || ""}
+        topicsWithUnits={topicsWithUnits}
+        questionTypes={questionTypes}
+      />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
