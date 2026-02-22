@@ -55,6 +55,10 @@ type Task = {
   completed_at: string | null
   is_important: boolean
   is_urgent: boolean
+  recurrence_type: string | null
+  recurrence_interval: number | null
+  recurrence_end_date: string | null
+  original_task_id: string | null
 }
 
 type Habit = {
@@ -694,8 +698,12 @@ function GoalCard({ goal, onClick }: { goal: Goal; onClick?: () => void }) {
         return Math.min((goal.current_value / goal.target_value) * 100, 100)
       case "streak":
       case "count":
-        if (!goal.target_count) return 0
-        return Math.min(((goal.current_count || 0) / goal.target_count) * 100, 100)
+        // 週期性目標使用 period_target,否則使用 target_count
+        const countTarget = (goal.period_type !== "once" && goal.period_target) 
+          ? goal.period_target 
+          : goal.target_count
+        if (!countTarget) return 0
+        return Math.min(((goal.current_count || 0) / countTarget) * 100, 100)
       default:
         return 0
     }
@@ -717,13 +725,23 @@ function GoalCard({ goal, onClick }: { goal: Goal; onClick?: () => void }) {
           const periodLabel = goal.period_type === "daily" ? "今日" : 
                              goal.period_type === "weekly" ? "本週" :
                              goal.period_type === "monthly" ? "本月" : "今年"
-          return `${periodLabel} ${goal.current_value || 0} / ${goal.period_target} ${goal.unit || ""}`
+          // 使用 period_target,如果為 null 則回退到 target_value
+          const target = goal.period_target ?? goal.target_value ?? 0
+          return `${periodLabel} ${goal.current_value || 0} / ${target} ${goal.unit || ""}`
         }
         return `${goal.current_value || 0} / ${goal.target_value || 0} ${goal.unit || ""}`
       case "streak":
-        return `${goal.current_count || 0} / ${goal.target_count} 天`
+        return `${goal.current_count || 0} / ${goal.target_count || 0} 天`
       case "count":
-        return `${goal.current_count || 0} / ${goal.target_count} ${goal.unit || "次"}`
+        // 週期性目標優先使用 period_target
+        if (goal.period_type !== "once" && goal.period_target) {
+          const periodLabel = goal.period_type === "daily" ? "今日" : 
+                             goal.period_type === "weekly" ? "本週" :
+                             goal.period_type === "monthly" ? "本月" : "今年"
+          const target = goal.period_target ?? goal.target_count ?? 0
+          return `${periodLabel} ${goal.current_count || 0} / ${target} ${goal.unit || "次"}`
+        }
+        return `${goal.current_count || 0} / ${goal.target_count || 0} ${goal.unit || "次"}`
       default:
         return ""
     }
@@ -807,6 +825,57 @@ function GoalSection({
       )}
     </div>
   )
+}
+
+// ============================================
+// 輔助函數
+// ============================================
+function calculateNextDate(task: Task): Date | null {
+  let nextDate: Date | null = null
+  const baseDate = task.due_date ? new Date(task.due_date) : new Date()
+
+  switch (task.recurrence_type) {
+    case "daily":
+      nextDate = new Date(baseDate)
+      nextDate.setDate(nextDate.getDate() + 1)
+      break
+    case "weekly":
+      nextDate = new Date(baseDate)
+      nextDate.setDate(nextDate.getDate() + 7)
+      break
+    case "biweekly":
+      nextDate = new Date(baseDate)
+      nextDate.setDate(nextDate.getDate() + 14)
+      break
+    case "monthly":
+      nextDate = new Date(baseDate)
+      nextDate.setMonth(nextDate.getMonth() + 1)
+      break
+    case "bimonthly":
+      nextDate = new Date(baseDate)
+      nextDate.setMonth(nextDate.getMonth() + 2)
+      break
+    case "quarterly":
+      nextDate = new Date(baseDate)
+      nextDate.setMonth(nextDate.getMonth() + 3)
+      break
+    case "semiannually":
+      nextDate = new Date(baseDate)
+      nextDate.setMonth(nextDate.getMonth() + 6)
+      break
+    case "yearly":
+      nextDate = new Date(baseDate)
+      nextDate.setFullYear(nextDate.getFullYear() + 1)
+      break
+    case "custom":
+      if (task.recurrence_interval) {
+        nextDate = new Date(baseDate)
+        nextDate.setDate(nextDate.getDate() + task.recurrence_interval)
+      }
+      break
+  }
+
+  return nextDate
 }
 
 // ============================================
@@ -1090,10 +1159,56 @@ export default function DashboardPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    await (supabase
-      .from("tasks") as any)
-      .update({ completed_at: completed ? new Date().toISOString() : null })
+    // 先獲取任務完整資訊
+    const { data: taskData } = await supabase
+      .from("tasks")
+      .select("*")
       .eq("id", taskId)
+      .single()
+    
+    if (!taskData) return
+    const task = taskData as Task
+
+    const isRecurring = task.recurrence_type && task.recurrence_type !== "none"
+
+    if (isRecurring && completed) {
+      // 重複任務:更新到下一個週期
+      const nextDate = calculateNextDate(task)
+      
+      if (!nextDate) {
+        console.error("無法計算下一個日期")
+        return
+      }
+
+      // 判斷是否應該繼續重複
+      let shouldContinue = true
+      if (task.recurrence_end_date) {
+        const endDate = new Date(task.recurrence_end_date)
+        if (nextDate > endDate) {
+          shouldContinue = false
+        }
+      }
+
+      if (shouldContinue) {
+        // 更新到下一個週期,completed_at 保持 null
+        await (supabase.from("tasks") as any)
+          .update({ due_date: format(nextDate, "yyyy-MM-dd") })
+          .eq("id", taskId)
+      } else {
+        // 超過結束日期,標記為完成
+        await (supabase.from("tasks") as any)
+          .update({ 
+            completed_at: new Date().toISOString(),
+            recurrence_type: "none"
+          })
+          .eq("id", taskId)
+      }
+    } else {
+      // 一般任務:正常切換完成狀態
+      await (supabase.from("tasks") as any)
+        .update({ completed_at: completed ? new Date().toISOString() : null })
+        .eq("id", taskId)
+    }
 
     fetchTodayData()
     fetchIndicators()

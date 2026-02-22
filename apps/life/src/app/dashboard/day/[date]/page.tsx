@@ -12,7 +12,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Calendar, CheckSquare,
   FileText, GraduationCap, BookMarked, Heart, Wallet, Dumbbell, Activity,
   Target, CalendarClock, Compass, ArrowLeft, Clock, MapPin, Check, Plus,
-  Pencil, Trash2, MoreVertical,
+  Pencil, Trash2, MoreVertical, Repeat,
 } from "lucide-react"
 
 // 導入所有對話框
@@ -52,6 +52,10 @@ type Task = {
   is_important: boolean
   is_urgent: boolean
   completed_at: string | null
+  recurrence_type: string | null
+  recurrence_interval: number | null
+  recurrence_end_date: string | null
+  original_task_id: string | null
 }
 
 type DailyPlan = {
@@ -567,9 +571,99 @@ export default function DayDetailPage() {
 
   const toggleTaskComplete = async (task: Task) => {
     const supabase = createClient()
-    const newCompletedAt = task.completed_at ? null : new Date().toISOString()
-    await (supabase.from("tasks") as any).update({ completed_at: newCompletedAt }).eq("id", task.id)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const isRecurring = task.recurrence_type && task.recurrence_type !== "none"
+    
+    if (isRecurring) {
+      const nextDate = calculateNextDate(task)
+            
+      if (!nextDate) {
+        console.error("無法計算下一個日期")
+        return
+      }
+
+      // 判斷是否應該繼續重複
+      let shouldContinue = true
+      if (task.recurrence_end_date) {
+        const endDate = new Date(task.recurrence_end_date)
+        if (nextDate > endDate) {
+          shouldContinue = false
+        }
+      }
+
+      if (shouldContinue) {
+        // 更新到下一個週期
+        await (supabase.from("tasks") as any)
+          .update({ due_date: format(nextDate, "yyyy-MM-dd") })
+          .eq("id", task.id)
+      } else {
+        // 標記為完成
+        await (supabase.from("tasks") as any)
+          .update({ 
+            completed_at: new Date().toISOString(),
+            recurrence_type: "none"
+          })
+          .eq("id", task.id)
+      }
+    } else {
+      // 一般任務
+      const newCompletedAt = task.completed_at ? null : new Date().toISOString()
+      await (supabase.from("tasks") as any)
+        .update({ completed_at: newCompletedAt })
+        .eq("id", task.id)
+    }
+
     fetchTasks()
+  }
+
+  const calculateNextDate = (task: Task): Date | null => {
+    let nextDate: Date | null = null
+    const baseDate = task.due_date ? new Date(task.due_date) : new Date()
+
+    switch (task.recurrence_type) {
+      case "daily":
+        nextDate = new Date(baseDate)
+        nextDate.setDate(nextDate.getDate() + 1)
+        break
+      case "weekly":
+        nextDate = new Date(baseDate)
+        nextDate.setDate(nextDate.getDate() + 7)
+        break
+      case "biweekly":
+        nextDate = new Date(baseDate)
+        nextDate.setDate(nextDate.getDate() + 14)
+        break
+      case "monthly":
+        nextDate = new Date(baseDate)
+        nextDate.setMonth(nextDate.getMonth() + 1)
+        break
+      case "bimonthly":
+        nextDate = new Date(baseDate)
+        nextDate.setMonth(nextDate.getMonth() + 2)
+        break
+      case "quarterly":
+        nextDate = new Date(baseDate)
+        nextDate.setMonth(nextDate.getMonth() + 3)
+        break
+      case "semiannually":
+        nextDate = new Date(baseDate)
+        nextDate.setMonth(nextDate.getMonth() + 6)
+        break
+      case "yearly":
+        nextDate = new Date(baseDate)
+        nextDate.setFullYear(nextDate.getFullYear() + 1)
+        break
+      case "custom":
+        if (task.recurrence_interval) {
+          nextDate = new Date(baseDate)
+          nextDate.setDate(nextDate.getDate() + task.recurrence_interval)
+        }
+        break
+    }
+
+    return nextDate
   }
 
   const toggleHabitLog = async (habit: HabitWithLog) => {
@@ -610,6 +704,9 @@ export default function DayDetailPage() {
         description: taskFormData.description || null,
         is_important: taskFormData.is_important || false,
         is_urgent: taskFormData.is_urgent || false,
+        recurrence_type: taskFormData.recurrence_type || null,
+        recurrence_interval: taskFormData.recurrence_interval || null,
+        recurrence_end_date: taskFormData.recurrence_end_date || null,
       }).eq("id", editingTask.id)
     } else {
       await (supabase.from("tasks") as any).insert({
@@ -619,6 +716,9 @@ export default function DayDetailPage() {
         due_date: selectedDateKey,
         is_important: taskFormData.is_important || false,
         is_urgent: taskFormData.is_urgent || false,
+        recurrence_type: taskFormData.recurrence_type || null,
+        recurrence_interval: taskFormData.recurrence_interval || null,
+        recurrence_end_date: taskFormData.recurrence_end_date || null,
       })
     }
     setTaskSaving(false)
@@ -894,6 +994,8 @@ export default function DayDetailPage() {
         value_primary: Number(healthFormData.value_primary),
         value_secondary: healthFormData.value_secondary ? Number(healthFormData.value_secondary) : null,
         note: healthFormData.note || null,
+        value_tertiary: healthFormData.value_tertiary ? Number(healthFormData.value_tertiary) : null,
+        measured_time: healthFormData.measured_time || null,
       }).eq("id", editingHealth.id)
     } else {
       await (supabase.from("health_metrics") as any).insert({
@@ -903,6 +1005,8 @@ export default function DayDetailPage() {
         value_primary: Number(healthFormData.value_primary),
         value_secondary: healthFormData.value_secondary ? Number(healthFormData.value_secondary) : null,
         note: healthFormData.note || null,
+        value_tertiary: healthFormData.value_tertiary ? Number(healthFormData.value_tertiary) : null,
+        measured_time: healthFormData.measured_time || null,
       })
     }
     setHealthSaving(false)
@@ -987,6 +1091,9 @@ export default function DayDetailPage() {
       description: task.description,
       is_important: task.is_important,
       is_urgent: task.is_urgent,
+      recurrence_type: task.recurrence_type || "none",
+      recurrence_interval: task.recurrence_interval,
+      recurrence_end_date: task.recurrence_end_date,
     })
     setTaskDialogOpen(true)
   }
@@ -1219,9 +1326,14 @@ export default function DayDetailPage() {
                       {task.completed_at && <Check className="w-4 h-4" />}
                     </button>
                     <div className={cn("flex-1 min-w-0", task.completed_at && "line-through text-gray-400")}>
-                      <span className="font-medium">{task.title}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{task.title}</span>
+                        {task.recurrence_type && task.recurrence_type !== "none" && (
+                          <Repeat className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                        )}
+                      </div>
                       {(task.is_important || task.is_urgent) && (
-                        <span className="ml-2 text-xs">
+                        <span className="text-xs">
                           {task.is_important && <span className="text-red-500">重要</span>}
                           {task.is_important && task.is_urgent && " / "}
                           {task.is_urgent && <span className="text-orange-500">緊急</span>}

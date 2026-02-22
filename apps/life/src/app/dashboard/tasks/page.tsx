@@ -216,14 +216,21 @@ export default function TasksPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   // 載入任務
+  const COMPLETED_TASK_RETENTION_DAYS = 30 // 可調整天數
+
   const fetchTasks = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
+    const cutoffDate = new Date()
+    cutoffDate.setDate(cutoffDate.getDate() - COMPLETED_TASK_RETENTION_DAYS)
+    const cutoffDateStr = format(cutoffDate, "yyyy-MM-dd")
 
     const { data } = await supabase
       .from("tasks")
       .select("*")
       .eq("user_id", user.id)
+      .or(`completed_at.is.null,completed_at.gte.${cutoffDateStr}`) // 關鍵修改
       .order("due_date", { ascending: true })
 
     if (data) {
