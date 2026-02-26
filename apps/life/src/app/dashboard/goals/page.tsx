@@ -50,6 +50,7 @@ import {
   BarChart3,
   Link as LinkIcon,
   RefreshCw,
+  FileDown,
 } from "lucide-react"
 
 // ============================================
@@ -299,6 +300,15 @@ function GoalCard({
                     暫停
                   </button>
                 )}
+                {goal.status === "active" && goal.track_source !== "reading_books" && (
+                  <button
+                    onClick={() => { onUpdateStatus(goal, "completed"); setMenuOpen(false) }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2 text-green-600"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    標記完成
+                  </button>
+                )}
                 {goal.status === "paused" && (
                   <button
                     onClick={() => { onUpdateStatus(goal, "active"); setMenuOpen(false) }}
@@ -306,6 +316,15 @@ function GoalCard({
                   >
                     <Play className="w-4 h-4" />
                     恢復
+                  </button>
+                )}
+                {goal.status === "completed" && (
+                  <button
+                    onClick={() => { onUpdateStatus(goal, "active"); setMenuOpen(false) }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    重新啟動
                   </button>
                 )}
                 <button
@@ -539,7 +558,16 @@ export default function GoalsPage() {
   // 計算單個目標的進度
   const calculateProgress = useCallback(async (goal: Goal, userId: string): Promise<{ currentValue?: number | null; currentCount?: number | null }> => {
     const config = (goal.track_config || {}) as TrackConfig
-    const startDate = config.start_date || goal.started_at || undefined
+
+    // 週期性目標使用當期起始日，否則用 config.start_date 或 started_at
+    let startDate: string | undefined
+    if (goal.period_type === "monthly") {
+      startDate = format(startOfMonth(new Date()), "yyyy-MM-dd")
+    } else if (goal.period_type === "yearly") {
+      startDate = format(startOfYear(new Date()), "yyyy-MM-dd")
+    } else {
+      startDate = config.start_date || goal.started_at || undefined
+    }
 
     switch (goal.track_source) {
       case "habit":
@@ -918,6 +946,105 @@ export default function GoalsPage() {
     fetchGoals()
   }
 
+  // PDF 匯出相關
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [exportYear, setExportYear] = useState(new Date().getFullYear())
+  const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1)
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportPDF = async () => {
+    setExporting(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const monthStart = `${exportYear}-${String(exportMonth).padStart(2, "0")}-01`
+      const monthEnd = format(endOfMonth(new Date(exportYear, exportMonth - 1)), "yyyy-MM-dd")
+
+      // 取得當月目標（active + completed）
+      const { data: goalsData } = await supabase
+        .from("goals")
+        .select("*")
+        .eq("user_id", user.id)
+        .in("status", ["active", "completed"])
+        .order("sort_order", { ascending: true })
+
+      if (!goalsData) return
+
+      // 取得當月讀完的書
+      const { data: booksData } = await supabase
+        .from("journals_reading")
+        .select("book_title, author, date")
+        .eq("user_id", user.id)
+        .eq("is_finished", true)
+        .gte("date", monthStart)
+        .lte("date", monthEnd)
+        .order("date", { ascending: true })
+
+      // 計算各目標本月進度
+      const goalsWithProgress = await Promise.all(
+        (goalsData as Goal[]).map(async (goal) => {
+          let currentCount = goal.current_count ?? 0
+          let currentValue = goal.current_value ?? 0
+
+          if (goal.track_source && goal.track_source !== "manual") {
+            const progress = await calculateProgress(goal, user.id)
+            if (progress.currentCount != null) currentCount = progress.currentCount
+            if (progress.currentValue != null) currentValue = progress.currentValue
+          }
+
+          let achieved = goal.status === "completed"
+          if (!achieved) {
+            if (goal.goal_type === "count" || goal.goal_type === "streak") {
+              const target = goal.period_type !== "once" ? (goal.period_target ?? 0) : (goal.target_count ?? 0)
+              achieved = currentCount >= target
+            } else if (goal.goal_type === "numeric") {
+              achieved = goal.direction === "decrease"
+                ? currentValue <= (goal.target_value ?? 0)
+                : currentValue >= (goal.target_value ?? 0)
+            }
+          }
+
+          return {
+            id: goal.id,
+            title: goal.title,
+            icon: goal.icon,
+            goal_type: goal.goal_type,
+            track_source: goal.track_source,
+            status: goal.status,
+            direction: goal.direction,
+            period_type: goal.period_type,
+            target_value: goal.target_value,
+            target_count: goal.target_count,
+            period_target: goal.period_target,
+            start_value: goal.start_value,
+            unit: goal.unit,
+            completed_at: goal.completed_at,
+            _currentCount: currentCount,
+            _currentValue: currentValue,
+            _achieved: achieved,
+          }
+        })
+      )
+
+      // 動態 import，避免 SSR 問題
+      const { generateGoalsPDF } = await import("./goals-pdf-document")
+      await generateGoalsPDF(
+        exportYear,
+        exportMonth,
+        goalsWithProgress,
+        (booksData || []).map(b => ({ title: b.book_title, author: b.author, date: b.date }))
+      )
+
+      setExportDialogOpen(false)
+    } catch (err) {
+      console.error("PDF 匯出失敗：", err)
+      alert("PDF 匯出失敗，請稍後再試")
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // 過濾目標
   const filteredGoals = goals.filter(goal => {
     if (filter === "all") return true
@@ -959,6 +1086,14 @@ export default function GoalsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setExportDialogOpen(true)}
+          >
+            <FileDown className="w-4 h-4 mr-2" />
+            匯出報告
+          </Button>
           <Button 
             variant="outline" 
             size="sm"
@@ -1412,6 +1547,62 @@ export default function GoalsPage() {
             <Button variant="outline" onClick={() => setProgressDialogOpen(false)}>取消</Button>
             <Button onClick={handleUpdateProgress} disabled={saving || !progressValue}>
               {saving ? "更新中..." : "更新"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 匯出報告對話框 */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>匯出目標達成報告</DialogTitle>
+            <DialogDescription>選擇要匯出的月份，產生 PDF 報告</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex gap-3">
+              <div className="flex-1 space-y-2">
+                <Label>年份</Label>
+                <Select
+                  value={String(exportYear)}
+                  onValueChange={(v) => setExportYear(parseInt(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[new Date().getFullYear(), new Date().getFullYear() - 1].map(y => (
+                      <SelectItem key={y} value={String(y)}>{y} 年</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label>月份</Label>
+                <Select
+                  value={String(exportMonth)}
+                  onValueChange={(v) => setExportMonth(parseInt(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                      <SelectItem key={m} value={String(m)}>{m} 月</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">
+              報告包含：目標進度、是否達成、達成日期，以及讀書類目標的本月書單
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportDialogOpen(false)}>取消</Button>
+            <Button onClick={handleExportPDF} disabled={exporting}>
+              <FileDown className="w-4 h-4 mr-2" />
+              {exporting ? "產生中..." : "匯出 PDF"}
             </Button>
           </DialogFooter>
         </DialogContent>
