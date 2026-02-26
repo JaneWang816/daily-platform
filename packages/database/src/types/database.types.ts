@@ -1524,6 +1524,7 @@ export type Database = {
           parent_id: string | null
           question_type_id: string
           subject_id: string
+          topic_id: string | null
           unit_id: string | null
           updated_at: string | null
           user_id: string
@@ -1547,6 +1548,7 @@ export type Database = {
           parent_id?: string | null
           question_type_id: string
           subject_id: string
+          topic_id?: string | null
           unit_id?: string | null
           updated_at?: string | null
           user_id: string
@@ -1570,6 +1572,7 @@ export type Database = {
           parent_id?: string | null
           question_type_id?: string
           subject_id?: string
+          topic_id?: string | null
           unit_id?: string | null
           updated_at?: string | null
           user_id?: string
@@ -1595,6 +1598,13 @@ export type Database = {
             columns: ["subject_id"]
             isOneToOne: false
             referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questions_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
             referencedColumns: ["id"]
           },
           {

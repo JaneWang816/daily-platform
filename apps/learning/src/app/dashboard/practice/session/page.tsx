@@ -1,4 +1,5 @@
 // apps/learning/src/app/dashboard/practice/session/page.tsx
+// ✨ 修改：加入 topic_id 篩選支援
 "use client"
 
 import { useEffect, useState, useCallback, useMemo } from "react"
@@ -38,6 +39,7 @@ interface Question {
   consecutive_correct: number | null
   wrong_count: number | null
   difficulty: string | null
+  topic_id: string | null  // ✨ 新增
   is_group: boolean | null
   parent_id: string | null
   order: number | null
@@ -63,7 +65,7 @@ export default function PracticeSessionPage() {
   const subjectId = searchParams.get("subject")
   const urlMode = searchParams.get("mode") || "all"
   const urlDifficulty = searchParams.get("difficulty") || "all"
-  const urlTopic = searchParams.get("topic")
+  const urlTopic = searchParams.get("topic")  // ✨ 取得 topic 參數
 
   // ✨ 設定狀態
   const [showSettings, setShowSettings] = useState(true) // 初始顯示設定
@@ -107,6 +109,7 @@ export default function PracticeSessionPage() {
   // 載入可用題目數量
   const [availableCount, setAvailableCount] = useState(0)
 
+  // ✨ 修改：加入 topic 篩選
   const fetchAvailableCount = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -114,12 +117,17 @@ export default function PracticeSessionPage() {
 
     let query = supabase
       .from("questions")
-      .select("id", { count: "exact", head: true })
+      .select("id, topic_id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .is("parent_id", null)
 
     if (subjectId) {
       query = query.eq("subject_id", subjectId)
+    }
+
+    // ✨ 加入 topic 篩選
+    if (urlTopic) {
+      query = query.eq("topic_id", urlTopic)
     }
 
     if (selectedMode === "mistakes") {
@@ -135,12 +143,13 @@ export default function PracticeSessionPage() {
     const { count } = await query
     setAvailableCount(count || 0)
     setLoading(false)
-  }, [subjectId, selectedMode, selectedDifficulty])
+  }, [subjectId, selectedMode, selectedDifficulty, urlTopic])
 
   useEffect(() => {
     fetchAvailableCount()
   }, [fetchAvailableCount])
 
+  // ✨ 修改：加入 topic 篩選
   const fetchQuestions = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -154,6 +163,11 @@ export default function PracticeSessionPage() {
 
     if (subjectId) {
       query = query.eq("subject_id", subjectId)
+    }
+
+    // ✨ 加入 topic 篩選
+    if (urlTopic) {
+      query = query.eq("topic_id", urlTopic)
     }
 
     // 模式篩選
@@ -207,7 +221,7 @@ export default function PracticeSessionPage() {
 
     setStarted(true)
     setShowSettings(false)
-  }, [subjectId, selectedMode, selectedDifficulty, questionCount])
+  }, [subjectId, selectedMode, selectedDifficulty, questionCount, urlTopic])
 
   const currentQuestion = useMemo(() => {
     if (questions.length === 0) return null
@@ -237,14 +251,13 @@ export default function PracticeSessionPage() {
 
     // 隨機打散
     const shuffledEntries = shuffleArray(entries)
-
-    const shuffled: ShuffledOption[] = shuffledEntries.map(([originalKey, value], index) => ({
+    const newShuffledOptions: ShuffledOption[] = shuffledEntries.map(([originalKey, value], idx) => ({
       originalKey,
-      displayKey: displayKeys[index],
-      value,
+      displayKey: displayKeys[idx],
+      value: value as string,
     }))
 
-    setShuffledOptions(shuffled)
+    setShuffledOptions(newShuffledOptions)
   }, [currentQuestion?.id])
 
   const getCorrectAnswer = (question: Question): string => {
@@ -262,14 +275,6 @@ export default function PracticeSessionPage() {
     return ""
   }
 
-  // ✨ 取得打散後的正確答案顯示鍵
-  const getShuffledCorrectKey = (): string => {
-    if (!currentQuestion) return ""
-    const correctOriginalKey = getCorrectAnswer(currentQuestion)
-    const found = shuffledOptions.find(opt => opt.originalKey === correctOriginalKey)
-    return found?.displayKey || correctOriginalKey
-  }
-
   const getCorrectAnswerDisplay = (question: Question): string => {
     const ans = question.answer as Record<string, unknown> | null
     if (!ans) return ""
@@ -277,13 +282,11 @@ export default function PracticeSessionPage() {
       if (typeof ans.correct === "boolean") {
         return ans.correct ? "是 (O)" : "否 (X)"
       }
-      // 選擇題，顯示打散後的選項
-      const correctKey = getShuffledCorrectKey()
-      const found = shuffledOptions.find(opt => opt.displayKey === correctKey)
-      if (found) {
-        return `${correctKey}. ${found.value}`
+      const optionKey = String(ans.correct)
+      if (question.options && question.options[optionKey]) {
+        return `${optionKey}. ${question.options[optionKey]}`
       }
-      return String(ans.correct)
+      return optionKey
     }
     if (ans.text !== undefined) {
       return String(ans.text)
@@ -291,34 +294,55 @@ export default function PracticeSessionPage() {
     return ""
   }
 
+  // ✨ 計算進度（考慮題組）
+  const progress = useMemo(() => {
+    let total = 0
+    let current = 0
+
+    questions.forEach((q, idx) => {
+      if (q.is_group && q.children) {
+        total += q.children.length
+        if (idx < currentIndex) {
+          current += q.children.length
+        } else if (idx === currentIndex) {
+          current += currentGroupChildIndex
+        }
+      } else {
+        total += 1
+        if (idx < currentIndex) {
+          current += 1
+        }
+      }
+    })
+
+    // 如果已經看過答案，算這題
+    if (showResult) {
+      current += 1
+    }
+
+    return { current, total }
+  }, [questions, currentIndex, currentGroupChildIndex, showResult])
+
   const checkAnswer = async () => {
     if (!currentQuestion) return
 
+    const correctAnswer = getCorrectAnswer(currentQuestion)
     const questionType = currentQuestion.question_types?.name
-    const isChoiceType = questionType === "single_choice" || questionType === "multiple_choice"
-    const isTrueFalse = questionType === "true_false"
 
     let userAns = ""
-    if (isChoiceType && selectedOption) {
-      // ✨ 將打散後的選擇轉回原始鍵
-      const found = shuffledOptions.find(opt => opt.displayKey === selectedOption)
-      userAns = found?.originalKey || selectedOption
-    } else if (isTrueFalse && selectedOption) {
-      userAns = selectedOption
-    } else {
-      userAns = userAnswer.trim()
-    }
-
-    const correctAnswer = getCorrectAnswer(currentQuestion)
     let correct = false
 
-    if (isTrueFalse) {
+    if (questionType === "single_choice" || questionType === "multiple_choice") {
+      // ✨ 將打散後的選項對應回原始選項
+      const selectedShuffled = shuffledOptions.find(opt => opt.displayKey === selectedOption)
+      userAns = selectedShuffled?.originalKey || ""
       correct = userAns === correctAnswer
-    } else if (isChoiceType) {
-      correct = userAns.toUpperCase() === correctAnswer.toUpperCase()
+    } else if (questionType === "true_false") {
+      userAns = selectedOption || ""
+      correct = userAns === correctAnswer
     } else {
-      // 簡答/填充：忽略大小寫和空白比對
-      correct = userAns.toLowerCase().replace(/\s/g, "") === correctAnswer.toLowerCase().replace(/\s/g, "")
+      userAns = userAnswer.trim()
+      correct = userAns.toLowerCase() === correctAnswer.toLowerCase()
     }
 
     setIsCorrect(correct)
@@ -327,18 +351,12 @@ export default function PracticeSessionPage() {
     // 記錄結果
     setResults(prev => [...prev, {
       question: currentQuestion,
-      userAnswer: isChoiceType ? selectedOption || "" : userAns,
+      userAnswer: userAns,
       isCorrect: correct,
     }])
 
     // 更新資料庫
-    await updateQuestionStats(correct)
-  }
-
-  const updateQuestionStats = async (correct: boolean) => {
-    if (!currentQuestion) return
     const supabase = createClient()
-
     await (supabase.from("questions") as any)
       .update({
         attempt_count: (currentQuestion.attempt_count || 0) + 1,
@@ -350,18 +368,16 @@ export default function PracticeSessionPage() {
   }
 
   const nextQuestion = () => {
-    const currentQ = questions[currentIndex]
-
     // 如果是題組且還有子題
-    if (currentQ?.is_group && currentQ.children) {
-      if (currentGroupChildIndex < currentQ.children.length - 1) {
+    if (currentGroupParent && currentGroupParent.children) {
+      if (currentGroupChildIndex < currentGroupParent.children.length - 1) {
         setCurrentGroupChildIndex(prev => prev + 1)
         resetAnswer()
         return
       }
     }
 
-    // 移到下一題
+    // 進入下一題
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(prev => prev + 1)
       setCurrentGroupChildIndex(0)
@@ -380,6 +396,7 @@ export default function PracticeSessionPage() {
 
   const skipQuestion = () => {
     if (!currentQuestion) return
+
     setResults(prev => [...prev, {
       question: currentQuestion,
       userAnswer: "(跳過)",
@@ -394,129 +411,91 @@ export default function PracticeSessionPage() {
     setResults([])
     setIsComplete(false)
     resetAnswer()
+    // ✨ 重新打亂順序
     setQuestions(prev => shuffleArray([...prev]))
   }
 
-  const startPractice = () => {
-    fetchQuestions()
-  }
-
-  // 計算總進度
-  const getTotalProgress = () => {
-    let total = 0
-    let current = 0
-
-    questions.forEach((q, idx) => {
-      if (q.is_group && q.children) {
-        total += q.children.length
-        if (idx < currentIndex) {
-          current += q.children.length
-        } else if (idx === currentIndex) {
-          current += currentGroupChildIndex + (showResult ? 1 : 0)
-        }
-      } else {
-        total += 1
-        if (idx < currentIndex || (idx === currentIndex && showResult)) {
-          current += 1
-        }
-      }
-    })
-
-    return { total, current }
-  }
-
-  const progress = getTotalProgress()
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  // ✨ 練習設定畫面
+  // 顯示設定畫面
   if (showSettings && !started) {
     return (
-      <div className="max-w-lg mx-auto py-8">
+      <div className="max-w-lg mx-auto py-6">
+        <Link
+          href="/dashboard/practice"
+          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-indigo-600 mb-6"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          返回題庫
+        </Link>
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+              <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
                 <Settings className="w-5 h-5 text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-800">練習設定</h2>
-                <p className="text-sm text-gray-500">選擇練習模式和難度</p>
+                <h2 className="text-lg font-semibold text-gray-800">練習設定</h2>
+                <p className="text-sm text-gray-500">選擇練習範圍和題數</p>
               </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* 練習模式 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">練習模式</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { value: "all", label: "全部", desc: "所有題目" },
-                    { value: "new", label: "新題", desc: "未練習過" },
-                    { value: "mistakes", label: "錯題", desc: "待加強" },
+                    { value: "all", label: "全部題目" },
+                    { value: "new", label: "只練新題" },
+                    { value: "mistakes", label: "錯題複習" },
                   ].map(opt => (
                     <button
                       key={opt.value}
                       onClick={() => setSelectedMode(opt.value)}
-                      className={`p-3 rounded-lg border-2 text-left transition-colors ${
+                      className={`px-3 py-2 rounded-lg text-sm border-2 transition-colors ${
                         selectedMode === opt.value
-                          ? "border-indigo-500 bg-indigo-50"
+                          ? "border-indigo-500 bg-indigo-50 text-indigo-700"
                           : "border-gray-200 hover:border-gray-300"
                       }`}
                     >
-                      <div className={`font-medium ${selectedMode === opt.value ? "text-indigo-700" : "text-gray-800"}`}>
-                        {opt.label}
-                      </div>
-                      <div className="text-xs text-gray-500">{opt.desc}</div>
+                      {opt.label}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* ✨ 難度選擇 */}
+              {/* 難易度 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">難易度</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { value: "all", label: "全部", color: "gray" },
+                    { value: "all", label: "全部", color: "indigo" },
                     { value: "basic", label: "基礎", color: "green" },
                     { value: "advanced", label: "進階", color: "orange" },
                   ].map(opt => (
                     <button
                       key={opt.value}
                       onClick={() => setSelectedDifficulty(opt.value)}
-                      className={`p-3 rounded-lg border-2 text-center transition-colors ${
+                      className={`px-3 py-2 rounded-lg text-sm border-2 transition-colors ${
                         selectedDifficulty === opt.value
-                          ? opt.color === "green" ? "border-green-500 bg-green-50"
-                            : opt.color === "orange" ? "border-orange-500 bg-orange-50"
-                            : "border-indigo-500 bg-indigo-50"
+                          ? opt.value === "basic"
+                            ? "border-green-500 bg-green-50 text-green-700"
+                            : opt.value === "advanced"
+                            ? "border-orange-500 bg-orange-50 text-orange-700"
+                            : "border-indigo-500 bg-indigo-50 text-indigo-700"
                           : "border-gray-200 hover:border-gray-300"
                       }`}
                     >
-                      <div className={`font-medium ${
-                        selectedDifficulty === opt.value
-                          ? opt.color === "green" ? "text-green-700"
-                            : opt.color === "orange" ? "text-orange-700"
-                            : "text-indigo-700"
-                          : "text-gray-800"
-                      }`}>
-                        {opt.label}
-                      </div>
+                      {opt.label}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* 題目數量 */}
+              {/* 題數設定 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  題目數量：{questionCount} 題
+                  練習題數：{questionCount} 題
                 </label>
                 <input
                   type="range"
@@ -525,7 +504,7 @@ export default function PracticeSessionPage() {
                   step="5"
                   value={questionCount}
                   onChange={(e) => setQuestionCount(Number(e.target.value))}
-                  className="w-full"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
                   <span>5</span>
@@ -536,23 +515,31 @@ export default function PracticeSessionPage() {
               {/* 可用題目數 */}
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">
-                  符合條件的題目：<span className="font-bold text-indigo-600">{availableCount}</span> 題
+                  符合條件的題目：
+                  <span className={`font-bold ml-1 ${availableCount > 0 ? "text-indigo-600" : "text-red-500"}`}>
+                    {availableCount}
+                  </span> 題
                 </p>
+                {urlTopic && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    已篩選特定主題
+                  </p>
+                )}
               </div>
+            </div>
 
-              {/* 開始按鈕 */}
-              <div className="flex gap-3">
-                <Link href="/dashboard/practice" className="flex-1">
-                  <Button variant="outline" className="w-full">返回</Button>
-                </Link>
-                <Button
-                  onClick={startPractice}
-                  disabled={availableCount === 0}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700"
-                >
-                  開始練習
-                </Button>
-              </div>
+            {/* 按鈕 */}
+            <div className="flex gap-3 mt-6">
+              <Link href="/dashboard/practice" className="flex-1">
+                <Button variant="outline" className="w-full">取消</Button>
+              </Link>
+              <Button
+                onClick={fetchQuestions}
+                disabled={availableCount === 0 || loading}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+              >
+                開始練習
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -560,7 +547,15 @@ export default function PracticeSessionPage() {
     )
   }
 
-  if (questions.length === 0 && started) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (questions.length === 0) {
     return (
       <div className="max-w-lg mx-auto py-12">
         <Card>
@@ -572,14 +567,9 @@ export default function PracticeSessionPage() {
             <p className="text-gray-500 mb-4">
               {selectedMode === "mistakes" ? "太棒了！沒有需要加強的題目" : "請先新增一些題目"}
             </p>
-            <div className="flex gap-3 justify-center">
-              <Button variant="outline" onClick={() => { setShowSettings(true); setStarted(false) }}>
-                調整設定
-              </Button>
-              <Link href="/dashboard/practice">
-                <Button variant="outline">返回題庫</Button>
-              </Link>
-            </div>
+            <Link href="/dashboard/practice">
+              <Button variant="outline">返回題庫</Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
@@ -589,30 +579,36 @@ export default function PracticeSessionPage() {
   // 完成畫面
   if (isComplete) {
     const correctCount = results.filter(r => r.isCorrect).length
-    const accuracy = Math.round((correctCount / results.length) * 100)
+    const percentage = Math.round((correctCount / results.length) * 100)
 
     return (
-      <div className="max-w-lg mx-auto py-8">
+      <div className="max-w-lg mx-auto py-6">
         <Card>
           <CardContent className="p-8 text-center">
-            <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Trophy className="w-10 h-10 text-white" />
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${
+              percentage >= 80 ? "bg-green-100" : percentage >= 60 ? "bg-yellow-100" : "bg-red-100"
+            }`}>
+              <Trophy className={`w-10 h-10 ${
+                percentage >= 80 ? "text-green-600" : percentage >= 60 ? "text-yellow-600" : "text-red-600"
+              }`} />
             </div>
-
             <h2 className="text-2xl font-bold text-gray-800 mb-2">練習完成！</h2>
+            <p className="text-gray-500 mb-6">
+              {percentage >= 80 ? "太棒了！表現優異！" : percentage >= 60 ? "不錯！繼續加油！" : "多練習幾次會更好！"}
+            </p>
 
-            <div className="grid grid-cols-3 gap-4 my-6">
+            <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="text-2xl font-bold text-gray-800">{results.length}</div>
-                <div className="text-sm text-gray-500">總題數</div>
+                <p className="text-2xl font-bold text-gray-800">{results.length}</p>
+                <p className="text-sm text-gray-500">總題數</p>
               </div>
               <div className="p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{correctCount}</div>
-                <div className="text-sm text-gray-500">答對</div>
+                <p className="text-2xl font-bold text-green-600">{correctCount}</p>
+                <p className="text-sm text-gray-500">答對</p>
               </div>
-              <div className="p-4 bg-indigo-50 rounded-lg">
-                <div className="text-2xl font-bold text-indigo-600">{accuracy}%</div>
-                <div className="text-sm text-gray-500">正確率</div>
+              <div className="p-4 bg-red-50 rounded-lg">
+                <p className="text-2xl font-bold text-red-600">{results.length - correctCount}</p>
+                <p className="text-sm text-gray-500">答錯</p>
               </div>
             </div>
 

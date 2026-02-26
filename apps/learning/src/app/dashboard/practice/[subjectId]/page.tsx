@@ -53,6 +53,7 @@ import {
   Upload,
   FileJson,
   PlusCircle,
+  FolderOpen,
 } from "lucide-react"
 
 interface Subject {
@@ -83,6 +84,7 @@ interface QuestionType {
   label: string
 }
 
+// ✨ 加入 topic_id
 interface Question {
   id: string
   subject_id: string
@@ -96,12 +98,14 @@ interface Question {
   wrong_count: number | null
   user_id: string
   created_at: string | null
+  topic_id: string | null  // ✨ 新增
   unit_id: string | null
   difficulty: string | null
   is_group: boolean | null
   parent_id: string | null
   order: number | null
   question_types?: QuestionType
+  topics?: { id: string; title: string } | null  // ✨ 新增
   units?: { id: string; title: string; topic_id: string } | null
   children?: Question[]
 }
@@ -196,6 +200,7 @@ export default function SubjectQuestionsPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [filterDifficulty, setFilterDifficulty] = useState<string>("all")
   const [filterTopicId, setFilterTopicId] = useState<string>("all")
+  const [filterUnitId, setFilterUnitId] = useState<string>("all")  // ✨ 新增
 
   const [examDialogOpen, setExamDialogOpen] = useState(false)
 
@@ -251,15 +256,22 @@ export default function SubjectQuestionsPage() {
     setLoading(false)
   }, [subjectId, questionTypeId])
 
+  // ✨ 修改：查詢時也取得 topic_id，明確指定 topics 關係
   const fetchQuestions = async () => {
     const supabase = createClient()
     
-    const { data: questionsData } = await supabase
+    // 使用 !questions_topic_id_fkey 明確指定關係，避免與 question_topics 多對多表衝突
+    const { data: questionsData, error } = await supabase
       .from("questions")
-      .select(`*, question_types (id, name, label), units (id, title, topic_id)`)
+      .select(`*, question_types (id, name, label), topics!questions_topic_id_fkey (id, title), units (id, title, topic_id)`)
       .eq("subject_id", subjectId)
       .is("parent_id", null)
       .order("created_at", { ascending: false })
+    
+    if (error) {
+      console.error("fetchQuestions error:", error)
+      return
+    }
 
     if (questionsData) {
       const groupIds = questionsData.filter((q: Question) => q.is_group).map((q: Question) => q.id)
@@ -315,17 +327,24 @@ export default function SubjectQuestionsPage() {
     setDialogOpen(true)
   }
 
+  // ✨ 修改：子題繼承 topic_id
   const openAddChildDialog = (parent: Question) => {
     resetForm()
     setParentQuestion(parent)
-    if (parent.unit_id && parent.units) {
+    // 繼承父題的主題和單元
+    if (parent.topic_id) {
+      setSelectedTopicId(parent.topic_id)
+    } else if (parent.unit_id && parent.units) {
       setSelectedTopicId(parent.units.topic_id)
+    }
+    if (parent.unit_id) {
       setSelectedUnitId(parent.unit_id)
     }
     setDifficulty(parent.difficulty || "basic")
     setDialogOpen(true)
   }
 
+  // ✨ 修改：編輯時讀取 topic_id
   const openEditDialog = (question: Question) => {
     setEditingQuestion(question)
     setIsGroupMode(question.is_group || false)
@@ -342,7 +361,11 @@ export default function SubjectQuestionsPage() {
     setExplanation(question.explanation || "")
     setDifficulty(question.difficulty || "basic")
     
-    if (question.units) {
+    // ✨ 優先使用 topic_id，否則從 units 推導
+    if (question.topic_id) {
+      setSelectedTopicId(question.topic_id)
+      setSelectedUnitId(question.unit_id || "")
+    } else if (question.units) {
       setSelectedTopicId(question.units.topic_id)
       setSelectedUnitId(question.unit_id || "")
     } else {
@@ -441,6 +464,7 @@ export default function SubjectQuestionsPage() {
     setNewItemTitle("")
   }
 
+  // ✨ 修改：儲存時加入 topic_id
   const handleSave = async (andContinue: boolean = false) => {
     if (!content.trim()) {
       alert(isGroupMode ? "請輸入題組說明" : "請輸入題目內容")
@@ -479,12 +503,14 @@ export default function SubjectQuestionsPage() {
       orderValue = existingChildren.reduce((max, child) => Math.max(max, (child.order || 0) + 1), 0)
     }
 
+    // ✨ 修改：加入 topic_id
     const questionData: Record<string, unknown> = {
       question_type_id: questionTypeId,
       content: content.trim(),
       options: Object.keys(filteredOptions).length > 0 ? filteredOptions : null,
       answer: answerJson,
       explanation: explanation.trim() || null,
+      topic_id: selectedTopicId || null,  // ✨ 新增
       unit_id: selectedUnitId || null,
       difficulty: difficulty,
       is_group: isGroupMode,
@@ -546,11 +572,13 @@ export default function SubjectQuestionsPage() {
     })
   }
 
-  // ✨ 匯出功能（JSON）
+  // ✨ 匯出功能（JSON）- 修改：支援 topic_id 篩選
   const handleExportJSON = () => {
-    // 根據選擇的主題/單元過濾題目
     const filteredQuestions = questions.filter(q => {
-      if (exportTopicId && q.units?.topic_id !== exportTopicId) return false
+      // ✨ 優先用 topic_id，否則用 units.topic_id
+      if (exportTopicId) {
+        if (q.topic_id !== exportTopicId && q.units?.topic_id !== exportTopicId) return false
+      }
       if (exportUnitId && q.unit_id !== exportUnitId) return false
       return true
     })
@@ -590,11 +618,13 @@ export default function SubjectQuestionsPage() {
     URL.revokeObjectURL(url)
   }
 
-  // ✨ 匯出功能（CSV）
+  // ✨ 匯出功能（CSV）- 修改：支援 topic_id 篩選
   const handleExportCSV = () => {
-    // 根據選擇的主題/單元過濾題目
     const filteredQuestions = questions.filter(q => {
-      if (exportTopicId && q.units?.topic_id !== exportTopicId) return false
+      // ✨ 優先用 topic_id，否則用 units.topic_id
+      if (exportTopicId) {
+        if (q.topic_id !== exportTopicId && q.units?.topic_id !== exportTopicId) return false
+      }
       if (exportUnitId && q.unit_id !== exportUnitId) return false
       return true
     })
@@ -617,7 +647,7 @@ export default function SubjectQuestionsPage() {
       const typeName = q.question_types?.name || 'short_answer'
       const typeLabel = typeName === 'single_choice' ? '選擇題' 
         : typeName === 'true_false' ? '是非題' 
-        : typeName === 'fill_blank' ? '填充題'
+        : typeName === 'fill_in_blank' ? '填充題'
         : '簡答題'
       
       // 取得答案文字
@@ -797,7 +827,7 @@ export default function SubjectQuestionsPage() {
       } else if (normalizedType.includes('是非') || normalizedType === 'true_false') {
         typeName = 'true_false'
       } else if (normalizedType.includes('填充') || normalizedType.includes('fill')) {
-        typeName = 'fill_in_blank'  // ✨ 修正：使用 fill_in_blank
+        typeName = 'fill_in_blank'
       } else if (normalizedType.includes('問答') || normalizedType.includes('essay')) {
         typeName = 'essay'
       } else if (normalizedType.includes('簡答') || normalizedType === 'short_answer') {
@@ -950,6 +980,7 @@ export default function SubjectQuestionsPage() {
     }
   }
 
+  // ✨ 修改：匯入時設定 topic_id
   const handleImport = async () => {
     if (!importPreview) return
 
@@ -980,7 +1011,6 @@ export default function SubjectQuestionsPage() {
         if (found) return found.id
       }
       if (normalized.includes('fill') || normalized.includes('填充')) {
-        // ✨ 支援 fill_blank 和 fill_in_blank
         const found = questionTypes.find(t => t.name === 'fill_in_blank' || t.name === 'fill_blank' || t.label?.includes('填充'))
         if (found) return found.id
       }
@@ -993,7 +1023,7 @@ export default function SubjectQuestionsPage() {
         if (found) return found.id
       }
 
-      // 找不到就用填充題（適合你的四則運算）或問答題
+      // 找不到就用填充題或問答題
       const fillBlank = questionTypes.find(t => t.name === 'fill_in_blank' || t.name === 'fill_blank')
       if (fillBlank) return fillBlank.id
       
@@ -1017,7 +1047,10 @@ export default function SubjectQuestionsPage() {
         is_group: q.is_group || false,
       }
 
-      // ✨ 只有選了主題/單元才加入
+      // ✨ 設定 topic_id 和 unit_id
+      if (importTopicId) {
+        questionData.topic_id = importTopicId
+      }
       if (importUnitId) {
         questionData.unit_id = importUnitId
       }
@@ -1050,7 +1083,10 @@ export default function SubjectQuestionsPage() {
             order: i,
           }
 
-          // 子題也繼承主題/單元
+          // ✨ 子題也繼承 topic_id 和 unit_id
+          if (importTopicId) {
+            childData.topic_id = importTopicId
+          }
           if (importUnitId) {
             childData.unit_id = importUnitId
           }
@@ -1088,11 +1124,20 @@ export default function SubjectQuestionsPage() {
     return <span className={`text-xs px-2 py-0.5 rounded ${option?.color}`}>{option?.label}</span>
   }
 
-  const getUnitBadge = (question: Question) => {
-    if (!question.units) return null
-    return <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded flex items-center gap-1"><Layers className="w-3 h-3" />{question.units.title}</span>
+  // ✨ 顯示主題或單元標籤
+  const getTopicUnitBadge = (question: Question) => {
+    // 優先顯示單元
+    if (question.units) {
+      return <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded flex items-center gap-1"><Layers className="w-3 h-3" />{question.units.title}</span>
+    }
+    // 其次顯示主題
+    if (question.topics) {
+      return <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded flex items-center gap-1"><FolderOpen className="w-3 h-3" />{question.topics.title}</span>
+    }
+    return null
   }
 
+  // ✨ 修改：篩選時支援主題和單元
   const filteredQuestions = questions.filter((q) => {
     if (filterType !== "all" && q.question_type_id !== filterType) return false
     if (filterStatus !== "all") {
@@ -1103,9 +1148,19 @@ export default function SubjectQuestionsPage() {
       if (filterStatus === "mastered" && consecutiveCorrect < 3) return false
     }
     if (filterDifficulty !== "all" && q.difficulty !== filterDifficulty) return false
-    if (filterTopicId !== "all" && (!q.units || q.units.topic_id !== filterTopicId)) return false
+    // ✨ 主題篩選：用 topic_id 或 units.topic_id
+    if (filterTopicId !== "all") {
+      if (q.topic_id !== filterTopicId && q.units?.topic_id !== filterTopicId) return false
+    }
+    // ✨ 單元篩選
+    if (filterUnitId !== "all" && q.unit_id !== filterUnitId) return false
     return true
   })
+  
+  // ✨ 取得篩選主題下的可用單元
+  const filterTopicUnits = filterTopicId !== "all" 
+    ? topicsWithUnits.find(t => t.id === filterTopicId)?.units || []
+    : []
 
   const selectedType = questionTypes.find((t) => t.id === questionTypeId)
   const isChoiceType = selectedType?.name === "single_choice" || selectedType?.name === "multiple_choice"
@@ -1148,344 +1203,588 @@ export default function SubjectQuestionsPage() {
           
           <div className="flex-1" />
 
-                    {/* 試卷按鈕 */}
-          <Link href="/dashboard/practice/exams">
-            <Button variant="outline" size="sm">
-              <History className="w-4 h-4 mr-1" />
-              試卷記錄
-            </Button>
-          </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setExamDialogOpen(true)}
-          >
-            <FileText className="w-4 h-4 mr-1" />
-            產生試卷
-          </Button>
-          
-          {/* ✨ 匯入按鈕 */}
+          {/* 匯入匯出 */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.csv,.txt"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
           <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
             <Upload className="w-4 h-4 mr-2" />匯入
           </Button>
-          <input ref={fileInputRef} type="file" accept=".json,.csv,.txt" className="hidden" onChange={handleFileSelect} />
-          
-          {/* ✨ 匯出按鈕 */}
-          <Button 
-            variant="outline" 
-            onClick={() => setExportDialogOpen(true)}
-            disabled={questions.length === 0}
-          >
+          <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
             <Download className="w-4 h-4 mr-2" />匯出
           </Button>
+          
+          {/* 產生試卷 */}
+          {totalQuestionCount >= 5 && (
+            <Button variant="outline" onClick={() => setExamDialogOpen(true)}>
+              <FileText className="w-4 h-4 mr-2" />產生試卷
+            </Button>
+          )}
+          
+          {/* 試卷記錄 */}
+          <Link href="/dashboard/practice/exams">
+            <Button variant="outline">
+              <History className="w-4 h-4 mr-2" />試卷記錄
+            </Button>
+          </Link>
 
+          {/* 開始練習 */}
+          {totalQuestionCount > 0 && (
+            <Link href={`/dashboard/practice/session?subject=${subjectId}`}>
+              <Button className="bg-indigo-600 hover:bg-indigo-700">
+                <Play className="w-4 h-4 mr-2" />開始練習
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
+      {/* 統計卡片 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <FileQuestion className="w-6 h-6 text-indigo-500 mx-auto mb-2" />
+            <p className="text-2xl font-bold text-gray-800">{totalQuestionCount}</p>
+            <p className="text-sm text-gray-500">總題目</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <HelpCircle className="w-6 h-6 text-gray-400 mx-auto mb-2" />
+            <p className="text-2xl font-bold text-gray-800">
+              {questions.reduce((count, q) => {
+                if (q.is_group && q.children) {
+                  return count + q.children.filter(c => !c.attempt_count).length
+                }
+                return count + (!q.attempt_count ? 1 : 0)
+              }, 0)}
+            </p>
+            <p className="text-sm text-gray-500">未練習</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <XCircle className="w-6 h-6 text-red-500 mx-auto mb-2" />
+            <p className="text-2xl font-bold text-gray-800">
+              {questions.reduce((count, q) => {
+                if (q.is_group && q.children) {
+                  return count + q.children.filter(c => (c.attempt_count || 0) > 0 && (c.consecutive_correct || 0) < 3).length
+                }
+                return count + ((q.attempt_count || 0) > 0 && (q.consecutive_correct || 0) < 3 ? 1 : 0)
+              }, 0)}
+            </p>
+            <p className="text-sm text-gray-500">待加強</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <CheckCircle className="w-6 h-6 text-green-500 mx-auto mb-2" />
+            <p className="text-2xl font-bold text-gray-800">
+              {questions.reduce((count, q) => {
+                if (q.is_group && q.children) {
+                  return count + q.children.filter(c => (c.consecutive_correct || 0) >= 3).length
+                }
+                return count + ((q.consecutive_correct || 0) >= 3 ? 1 : 0)
+              }, 0)}
+            </p>
+            <p className="text-sm text-gray-500">已熟練</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* 篩選列 */}
-      <div className="flex flex-wrap items-center gap-3 p-3 bg-gray-50 rounded-lg">
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="text-sm border rounded-md px-3 py-1.5 bg-white">
-          <option value="all">所有題型</option>
-          {questionTypes.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
-        </select>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="text-sm border rounded-md px-3 py-1.5 bg-white">
-          <option value="all">所有狀態</option>
-          <option value="new">未練習</option>
-          <option value="mistake">待加強</option>
-          <option value="mastered">已熟練</option>
-        </select>
-        <select value={filterDifficulty} onChange={(e) => setFilterDifficulty(e.target.value)} className="text-sm border rounded-md px-3 py-1.5 bg-white">
-          <option value="all">所有難度</option>
-          <option value="basic">基礎</option>
-          <option value="advanced">進階</option>
-        </select>
+      <div className="flex flex-wrap gap-2 p-4 bg-gray-50 rounded-lg">
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="題型" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部題型</SelectItem>
+            {questionTypes.map((type) => (
+              <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="狀態" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部狀態</SelectItem>
+            <SelectItem value="new">未練習</SelectItem>
+            <SelectItem value="mistake">待加強</SelectItem>
+            <SelectItem value="mastered">已熟練</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="難易度" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部難度</SelectItem>
+            <SelectItem value="basic">基礎</SelectItem>
+            <SelectItem value="advanced">進階</SelectItem>
+          </SelectContent>
+        </Select>
+
         {topicsWithUnits.length > 0 && (
-          <select value={filterTopicId} onChange={(e) => setFilterTopicId(e.target.value)} className="text-sm border rounded-md px-3 py-1.5 bg-white">
-            <option value="all">所有主題</option>
-            {topicsWithUnits.map((topic) => <option key={topic.id} value={topic.id}>{topic.title}</option>)}
-          </select>
+          <Select 
+            value={filterTopicId} 
+            onValueChange={(value) => {
+              setFilterTopicId(value)
+              setFilterUnitId("all")  // ✨ 切換主題時重置單元
+            }}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="主題" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部主題</SelectItem>
+              {topicsWithUnits.map((topic) => (
+                <SelectItem key={topic.id} value={topic.id}>{topic.title}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
-        <span className="text-sm text-gray-500">共 {totalQuestionCount} 題</span>
-        {totalQuestionCount > 0 && (
-          <Link href={`/dashboard/practice/session?subject=${subjectId}`} className="ml-auto">
-            <Button size="sm" className="bg-green-600 hover:bg-green-700">
-              <Play className="w-4 h-4 mr-2" />開始練習
-            </Button>
-          </Link>
+
+        {/* ✨ 單元篩選（選了主題且有單元時顯示） */}
+        {filterTopicId !== "all" && filterTopicUnits.length > 0 && (
+          <Select value={filterUnitId} onValueChange={setFilterUnitId}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="單元" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部單元</SelectItem>
+              {filterTopicUnits.map((unit) => (
+                <SelectItem key={unit.id} value={unit.id}>{unit.title}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
+
+        <div className="flex-1" />
+        <span className="text-sm text-gray-500 self-center">
+          顯示 {filteredQuestions.length} / {questions.length} 題
+        </span>
       </div>
 
       {/* 題目列表 */}
-      {questions.length === 0 ? (
+      {filteredQuestions.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <FileQuestion className="w-8 h-8 text-gray-400" />
-            </div>
-            <p className="text-gray-500 mb-4">還沒有任何題目</p>
-            <div className="flex gap-2">
-              <Button onClick={openCreateGroupDialog} variant="outline"><LayoutList className="w-4 h-4 mr-2" />新增題組</Button>
-              <Button onClick={openCreateDialog} variant="outline"><Plus className="w-4 h-4 mr-2" />新增題目</Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : filteredQuestions.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-8">
-            <p className="text-gray-500">沒有符合篩選條件的題目</p>
+            <FileQuestion className="w-12 h-12 text-gray-300 mb-4" />
+            <p className="text-gray-500 mb-4">{questions.length === 0 ? "尚未新增任何題目" : "沒有符合條件的題目"}</p>
+            {questions.length === 0 && (
+              <Button onClick={openCreateDialog}>
+                <Plus className="w-4 h-4 mr-2" />新增第一道題目
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredQuestions.map((question, index) => (
-            <div key={question.id}>
-              <Card className={`relative group ${question.is_group ? 'border-l-4 border-l-purple-400' : ''}`} style={{ zIndex: openMenuId === question.id ? 50 : 1 }}>
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
+          {filteredQuestions.map((question) => (
+            <Card key={question.id} className="group relative">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-4">
+                  {/* 題型圖示 */}
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    question.is_group ? "bg-purple-100" : "bg-indigo-100"
+                  }`}>
                     {question.is_group ? (
-                      <button onClick={() => toggleGroupExpand(question.id)} className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 flex-shrink-0 hover:bg-purple-200">
-                        {expandedGroups.has(question.id) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                      </button>
+                      <LayoutList className="w-5 h-5 text-purple-600" />
                     ) : (
-                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm font-medium text-gray-600 flex-shrink-0">{index + 1}</div>
+                      <FileQuestion className="w-5 h-5 text-indigo-600" />
                     )}
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        {question.is_group ? (
-                          <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded flex items-center gap-1"><LayoutList className="w-3 h-3" />題組 ({question.children?.length || 0} 題)</span>
-                        ) : (
-                          <span className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded">{question.question_types?.label || "未知"}</span>
-                        )}
-                        {getDifficultyBadge(question)}
-                        {getUnitBadge(question)}
-                        {getStatusBadge(question)}
-                      </div>
-                      <p className="text-gray-800 line-clamp-2">{question.content}</p>
-                      {!question.is_group && (question.attempt_count || 0) > 0 && (
-                        <p className="text-xs text-gray-400 mt-2">練習 {question.attempt_count} 次 · 連續正確 {question.consecutive_correct || 0} 次</p>
-                      )}
-                    </div>
-
-                    <div className="relative z-10">
-                      <button onClick={() => setOpenMenuId(openMenuId === question.id ? null : question.id)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                      {openMenuId === question.id && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
-                          <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-                            {question.is_group && (
-                              <button onClick={() => { setOpenMenuId(null); openAddChildDialog(question) }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50">
-                                <Plus className="w-4 h-4" />新增子題
-                              </button>
-                            )}
-                            <button onClick={() => openEditDialog(question)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                              <Pencil className="w-4 h-4" />編輯
-                            </button>
-                            <button onClick={() => confirmDelete(question)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
-                              <Trash2 className="w-4 h-4" />刪除
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
 
-              {/* 子題列表 */}
-              {question.is_group && expandedGroups.has(question.id) && (
-                <div className="ml-8 mt-2 space-y-2">
-                  {question.children && question.children.length > 0 ? (
-                    question.children.map((child, childIndex) => (
-                      <Card key={child.id} className="border-l-2 border-l-purple-200">
-                        <CardContent className="p-3">
-                          <div className="flex items-start gap-3">
-                            <div className="w-6 h-6 bg-purple-50 rounded-full flex items-center justify-center text-xs font-medium text-purple-600 flex-shrink-0">{childIndex + 1}</div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap items-center gap-2 mb-1">
-                                <span className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded">{child.question_types?.label || "未知"}</span>
-                                {getStatusBadge(child)}
+                  {/* 內容 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center flex-wrap gap-2 mb-2">
+                      <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                        {question.is_group ? "題組" : question.question_types?.label}
+                      </span>
+                      {!question.is_group && getStatusBadge(question)}
+                      {getDifficultyBadge(question)}
+                      {getTopicUnitBadge(question)}
+                    </div>
+                    <p className="text-gray-800 line-clamp-2 whitespace-pre-wrap">{question.content}</p>
+                    
+                    {/* 題組展開 */}
+                    {question.is_group && question.children && question.children.length > 0 && (
+                      <div className="mt-3">
+                        <button
+                          onClick={() => toggleGroupExpand(question.id)}
+                          className="flex items-center gap-1 text-sm text-purple-600 hover:underline"
+                        >
+                          {expandedGroups.has(question.id) ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )}
+                          {question.children.length} 道子題
+                        </button>
+                        
+                        {expandedGroups.has(question.id) && (
+                          <div className="mt-2 pl-4 border-l-2 border-purple-200 space-y-2">
+                            {question.children.map((child, idx) => (
+                              <div key={child.id} className="p-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs text-purple-500">子題 {idx + 1}</span>
+                                  <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                    {child.question_types?.label}
+                                  </span>
+                                  {getStatusBadge(child)}
+                                </div>
+                                <p className="text-sm text-gray-700 line-clamp-2">{child.content}</p>
+                                <div className="flex gap-2 mt-2">
+                                  <button
+                                    onClick={() => openEditDialog(child)}
+                                    className="text-xs text-indigo-600 hover:underline"
+                                  >
+                                    編輯
+                                  </button>
+                                  <button
+                                    onClick={() => confirmDelete(child)}
+                                    className="text-xs text-red-600 hover:underline"
+                                  >
+                                    刪除
+                                  </button>
+                                </div>
                               </div>
-                              <p className="text-sm text-gray-800 line-clamp-2">{child.content}</p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => openEditDialog(child)} className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"><Pencil className="w-3 h-3" /></button>
-                              <button onClick={() => confirmDelete(child)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
-                            </div>
+                            ))}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openAddChildDialog(question)}
+                              className="w-full mt-2"
+                            >
+                              <PlusCircle className="w-4 h-4 mr-2" />新增子題
+                            </Button>
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  ) : (
-                    <div className="text-center py-4 text-sm text-gray-400">尚無子題，<button onClick={() => openAddChildDialog(question)} className="text-purple-600 hover:underline">點此新增</button></div>
-                  )}
-                  {question.children && question.children.length > 0 && (
-                    <button onClick={() => openAddChildDialog(question)} className="w-full py-2 text-sm text-purple-600 hover:bg-purple-50 rounded-lg border border-dashed border-purple-200 flex items-center justify-center gap-1">
-                      <Plus className="w-4 h-4" />新增子題
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 操作選單 */}
+                  <div className="relative flex-shrink-0">
+                    <button
+                      onClick={() => setOpenMenuId(openMenuId === question.id ? null : question.id)}
+                      className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                    >
+                      <MoreVertical className="w-5 h-5" />
                     </button>
-                  )}
+                    {openMenuId === question.id && (
+                      <div className="absolute right-0 top-full mt-1 w-32 bg-white border rounded-lg shadow-lg z-10">
+                        <button
+                          onClick={() => openEditDialog(question)}
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          <Pencil className="w-4 h-4" />編輯
+                        </button>
+                        {question.is_group && (
+                          <button
+                            onClick={() => { openAddChildDialog(question); setOpenMenuId(null) }}
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                          >
+                            <PlusCircle className="w-4 h-4" />新增子題
+                          </button>
+                        )}
+                        <button
+                          onClick={() => confirmDelete(question)}
+                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                        >
+                          <Trash2 className="w-4 h-4" />刪除
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
 
-      {/* 新增/編輯 Dialog */}
+      {/* 新增/編輯題目 Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>
-              {editingQuestion ? (editingQuestion.is_group ? "編輯題組" : "編輯題目") : parentQuestion ? "新增子題" : isGroupMode ? "新增題組" : "新增題目"}
+              {editingQuestion ? "編輯題目" : parentQuestion ? "新增子題" : isGroupMode ? "新增題組" : "新增題目"}
             </DialogTitle>
             <DialogDescription>
-              {isGroupMode ? "題組是相關題目的容器" : parentQuestion ? `在題組下新增子題` : "建立新題目"}
+              {isGroupMode ? "題組可包含多道相關的子題" : parentQuestion ? `為「${parentQuestion.content.substring(0, 20)}...」新增子題` : "填寫題目資訊"}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 mt-4">
+          <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+            {/* 主題與單元選擇 - 非子題時顯示 */}
             {!parentQuestion && (
-              <div className="p-4 bg-gray-50 rounded-lg space-y-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                  <Layers className="w-4 h-4" />題目歸屬（選填）
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-gray-600">主題</Label>
-                      <button onClick={() => setNewTopicDialogOpen(true)} className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
-                        <PlusCircle className="w-3 h-3" />新增
-                      </button>
-                    </div>
-                    <Select value={selectedTopicId || "__none__"} onValueChange={handleTopicChange}>
-                      <SelectTrigger><SelectValue placeholder="選擇主題" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">不指定</SelectItem>
-                        {topicsWithUnits.map((topic) => <SelectItem key={topic.id} value={topic.id}>{topic.title}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-gray-600">單元</Label>
-                      {selectedTopicId && (
-                        <button onClick={() => setNewUnitDialogOpen(true)} className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
-                          <PlusCircle className="w-3 h-3" />新增
-                        </button>
-                      )}
-                    </div>
-                    <Select value={selectedUnitId || "__none__"} onValueChange={(val) => setSelectedUnitId(val === "__none__" ? "" : val)} disabled={!selectedTopicId}>
-                      <SelectTrigger><SelectValue placeholder={selectedTopicId ? "選擇單元" : "請先選擇主題"} /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">不指定</SelectItem>
-                        {selectedTopicUnits.map((unit) => <SelectItem key={unit.id} value={unit.id}>{unit.title}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-gray-600">難易度</Label>
-                  <div className="flex gap-3">
-                    {DIFFICULTY_OPTIONS.map((option) => (
-                      <button key={option.value} type="button" onClick={() => setDifficulty(option.value)}
-                        className={`flex-1 py-2 px-4 rounded-lg border-2 transition-colors ${difficulty === option.value ? (option.value === "basic" ? "border-green-500 bg-green-50" : "border-orange-500 bg-orange-50") : "border-gray-200 hover:border-gray-300"}`}>
-                        <span className={`text-sm font-medium ${difficulty === option.value ? (option.value === "basic" ? "text-green-700" : "text-orange-700") : "text-gray-600"}`}>{option.label}</span>
-                      </button>
-                    ))}
+                  <Label>主題</Label>
+                  <div className="flex gap-2">
+                    <Select value={selectedTopicId || "__none__"} onValueChange={handleTopicChange}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="選擇主題" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">不指定主題</SelectItem>
+                        {topicsWithUnits.map((topic) => (
+                          <SelectItem key={topic.id} value={topic.id}>{topic.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="icon" onClick={() => setNewTopicDialogOpen(true)}>
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>單元</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={selectedUnitId || "__none__"}
+                      onValueChange={(v) => setSelectedUnitId(v === "__none__" ? "" : v)}
+                      disabled={!selectedTopicId}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder={selectedTopicId ? "選擇單元" : "請先選擇主題"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">不指定單元</SelectItem>
+                        {selectedTopicUnits.map((unit) => (
+                          <SelectItem key={unit.id} value={unit.id}>{unit.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setNewUnitDialogOpen(true)}
+                      disabled={!selectedTopicId}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               </div>
             )}
 
-            {parentQuestion && <div className="p-3 bg-purple-50 rounded-lg text-sm text-purple-700">子題繼承母題的單元和難易度</div>}
-
-            {!isGroupMode && (
+            {/* 題型與難易度 */}
+            <div className="grid grid-cols-2 gap-4">
+              {!isGroupMode && (
+                <div className="space-y-2">
+                  <Label>題型</Label>
+                  <Select value={questionTypeId} onValueChange={setQuestionTypeId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="選擇題型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {questionTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
               <div className="space-y-2">
-                <Label>題型</Label>
-                <Select value={questionTypeId} onValueChange={setQuestionTypeId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{questionTypes.map((type) => <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>)}</SelectContent>
-                </Select>
+                <Label>難易度</Label>
+                <div className="flex gap-2">
+                  {DIFFICULTY_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setDifficulty(opt.value)}
+                      className={`flex-1 px-4 py-2 rounded-lg border-2 transition-colors ${
+                        difficulty === opt.value
+                          ? opt.value === "basic"
+                            ? "border-green-500 bg-green-50"
+                            : "border-orange-500 bg-orange-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <span className={difficulty === opt.value ? (opt.value === "basic" ? "text-green-700" : "text-orange-700") : "text-gray-600"}>
+                        {opt.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>{isGroupMode ? "題組說明" : "題目內容"}</Label>
-              <Textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder={isGroupMode ? "輸入題組說明..." : "輸入題目..."} rows={isGroupMode ? 6 : 3} />
             </div>
 
+            {/* 題目內容 */}
+            <div className="space-y-2">
+              <Label>{isGroupMode ? "題組說明" : "題目內容"}</Label>
+              <Textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={isGroupMode ? "輸入題組的說明文字或閱讀文章..." : "輸入題目內容"}
+                rows={4}
+              />
+            </div>
+
+            {/* 選項 - 選擇題 */}
             {!isGroupMode && isChoiceType && (
               <div className="space-y-2">
                 <Label>選項</Label>
-                {["A", "B", "C", "D"].map((key) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <span className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-sm">{key}</span>
-                    <Input value={options[key] || ""} onChange={(e) => setOptions({ ...options, [key]: e.target.value })} placeholder={`選項 ${key}`} />
-                  </div>
-                ))}
+                <div className="grid grid-cols-2 gap-2">
+                  {["A", "B", "C", "D"].map((key) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded text-sm font-medium">
+                        {key}
+                      </span>
+                      <Input
+                        value={options[key] || ""}
+                        onChange={(e) => setOptions({ ...options, [key]: e.target.value })}
+                        placeholder={`選項 ${key}`}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
+            {/* 答案 */}
             {!isGroupMode && (
               <div className="space-y-2">
                 <Label>正確答案</Label>
-                {isChoiceType ? (
-                  <Select value={answer} onValueChange={setAnswer}>
-                    <SelectTrigger><SelectValue placeholder="選擇正確答案" /></SelectTrigger>
-                    <SelectContent>{["A", "B", "C", "D"].filter((key) => options[key]?.trim()).map((key) => <SelectItem key={key} value={key}>{key}. {options[key]}</SelectItem>)}</SelectContent>
-                  </Select>
-                ) : isTrueFalseType ? (
-                  <Select value={answer} onValueChange={setAnswer}>
-                    <SelectTrigger><SelectValue placeholder="選擇正確答案" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="true">是 (O)</SelectItem>
-                      <SelectItem value="false">否 (X)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {isTrueFalseType ? (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAnswer("true")}
+                      className={`flex-1 p-3 rounded-lg border-2 transition-colors ${
+                        answer === "true" || answer === "O" || answer === "是"
+                          ? "border-green-500 bg-green-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      ⭕ 是 (O)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAnswer("false")}
+                      className={`flex-1 p-3 rounded-lg border-2 transition-colors ${
+                        answer === "false" || answer === "X" || answer === "否"
+                          ? "border-red-500 bg-red-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      ❌ 否 (X)
+                    </button>
+                  </div>
+                ) : isChoiceType ? (
+                  <div className="flex gap-2">
+                    {["A", "B", "C", "D"].map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setAnswer(key)}
+                        disabled={!options[key]}
+                        className={`w-12 h-12 rounded-lg border-2 font-medium transition-colors ${
+                          answer === key
+                            ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                            : options[key]
+                            ? "border-gray-200 hover:border-gray-300"
+                            : "border-gray-100 text-gray-300 cursor-not-allowed"
+                        }`}
+                      >
+                        {key}
+                      </button>
+                    ))}
+                  </div>
                 ) : (
-                  <Input value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="輸入正確答案..." />
+                  <Input
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    placeholder="輸入正確答案"
+                  />
                 )}
               </div>
             )}
 
+            {/* 解析 */}
             {!isGroupMode && (
               <div className="space-y-2">
                 <Label>解析（選填）</Label>
-                <Textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} placeholder="輸入解析..." rows={2} />
+                <Textarea
+                  value={explanation}
+                  onChange={(e) => setExplanation(e.target.value)}
+                  placeholder="輸入題目解析，幫助理解"
+                  rows={2}
+                />
               </div>
             )}
 
-            {/* ✨ 按鈕區：新增連續新增功能 */}
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>取消</Button>
-              {!editingQuestion && (
-                <Button variant="outline" onClick={() => handleSave(true)} disabled={saving}>
-                  {saving ? "儲存中..." : "儲存並繼續"}
-                </Button>
-              )}
-              <Button onClick={() => handleSave(false)} disabled={saving}>{saving ? "儲存中..." : "儲存"}</Button>
-            </div>
+            {/* 連續新增選項 */}
+            {!editingQuestion && !isGroupMode && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="continueAdding"
+                  checked={continueAdding}
+                  onChange={(e) => setContinueAdding(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <label htmlFor="continueAdding" className="text-sm text-gray-600">
+                  儲存後繼續新增（保留主題、單元、難度設定）
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* 按鈕 */}
+          <div className="flex gap-2 pt-4 mt-4 border-t">
+            <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>
+              取消
+            </Button>
+            <div className="flex-1" />
+            {!editingQuestion && continueAdding && !isGroupMode && (
+              <Button variant="outline" onClick={() => handleSave(true)} disabled={saving}>
+                {saving ? "儲存中..." : "儲存並繼續"}
+              </Button>
+            )}
+            <Button onClick={() => handleSave(false)} disabled={saving}>
+              {saving ? "儲存中..." : editingQuestion ? "更新" : "儲存"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* 新增主題 Dialog */}
       <Dialog open={newTopicDialogOpen} onOpenChange={setNewTopicDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>新增主題</DialogTitle>
-            <DialogDescription>在此科目下建立新主題</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 mt-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label>主題名稱</Label>
-              <Input value={newItemTitle} onChange={(e) => setNewItemTitle(e.target.value)} placeholder="例如：第一章、Unit 1..." />
+              <Input
+                value={newItemTitle}
+                onChange={(e) => setNewItemTitle(e.target.value)}
+                placeholder="例如：第一章 四則運算"
+                onKeyDown={(e) => e.key === "Enter" && handleAddTopic()}
+              />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setNewTopicDialogOpen(false); setNewItemTitle("") }}>取消</Button>
-              <Button onClick={handleAddTopic} disabled={savingNewItem || !newItemTitle.trim()}>{savingNewItem ? "新增中..." : "新增"}</Button>
+              <Button variant="outline" onClick={() => { setNewTopicDialogOpen(false); setNewItemTitle("") }}>
+                取消
+              </Button>
+              <Button onClick={handleAddTopic} disabled={savingNewItem || !newItemTitle.trim()}>
+                {savingNewItem ? "新增中..." : "新增"}
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -1493,19 +1792,30 @@ export default function SubjectQuestionsPage() {
 
       {/* 新增單元 Dialog */}
       <Dialog open={newUnitDialogOpen} onOpenChange={setNewUnitDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>新增單元</DialogTitle>
-            <DialogDescription>在選定主題下建立新單元</DialogDescription>
+            <DialogDescription>
+              在「{topicsWithUnits.find(t => t.id === selectedTopicId)?.title}」下新增單元
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 mt-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label>單元名稱</Label>
-              <Input value={newItemTitle} onChange={(e) => setNewItemTitle(e.target.value)} placeholder="例如：1-1 基本概念..." />
+              <Input
+                value={newItemTitle}
+                onChange={(e) => setNewItemTitle(e.target.value)}
+                placeholder="例如：1-1 整數加減"
+                onKeyDown={(e) => e.key === "Enter" && handleAddUnit()}
+              />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setNewUnitDialogOpen(false); setNewItemTitle("") }}>取消</Button>
-              <Button onClick={handleAddUnit} disabled={savingNewItem || !newItemTitle.trim()}>{savingNewItem ? "新增中..." : "新增"}</Button>
+              <Button variant="outline" onClick={() => { setNewUnitDialogOpen(false); setNewItemTitle("") }}>
+                取消
+              </Button>
+              <Button onClick={handleAddUnit} disabled={savingNewItem || !newItemTitle.trim()}>
+                {savingNewItem ? "新增中..." : "新增"}
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -1675,7 +1985,9 @@ export default function SubjectQuestionsPage() {
                     符合條件的題目：
                     <span className="font-bold text-indigo-600">
                       {questions.filter(q => {
-                        if (exportTopicId && q.units?.topic_id !== exportTopicId) return false
+                        if (exportTopicId) {
+                          if (q.topic_id !== exportTopicId && q.units?.topic_id !== exportTopicId) return false
+                        }
                         if (exportUnitId && q.unit_id !== exportUnitId) return false
                         return true
                       }).length}
@@ -1735,7 +2047,9 @@ export default function SubjectQuestionsPage() {
                   setExportDialogOpen(false)
                 }}
                 disabled={questions.filter(q => {
-                  if (exportTopicId && q.units?.topic_id !== exportTopicId) return false
+                  if (exportTopicId) {
+                    if (q.topic_id !== exportTopicId && q.units?.topic_id !== exportTopicId) return false
+                  }
                   if (exportUnitId && q.unit_id !== exportUnitId) return false
                   return true
                 }).length === 0}
